@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { MessageCircle, Facebook } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Reveal } from "@/components/Reveal";
 import { BRAND, whatsappGeneralUrl } from "@/lib/config";
+import { fetchAppSettings } from "@/lib/settings";
 
 export const Route = createFileRoute("/contact")({
   component: ContactPage,
@@ -16,6 +18,8 @@ export const Route = createFileRoute("/contact")({
 });
 
 function ContactPage() {
+  const { data: settings } = useQuery({ queryKey: ["app-settings"], queryFn: fetchAppSettings });
+  const waNumber = settings?.whatsapp_number;
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -35,7 +39,7 @@ function ContactPage() {
 
           <Reveal delay={450}>
             <div className="mt-10">
-              <a href={whatsappGeneralUrl()} target="_blank" rel="noopener noreferrer" className="btn-zy">
+              <a href={whatsappGeneralUrl(undefined, waNumber)} target="_blank" rel="noopener noreferrer" className="btn-zy">
                 <MessageCircle className="h-5 w-5" /> Chat on WhatsApp
               </a>
             </div>
@@ -43,7 +47,7 @@ function ContactPage() {
 
           <Reveal delay={600}>
             <div className="mt-16 grid gap-6 sm:grid-cols-2 max-w-lg mx-auto">
-              <SocialCard href={whatsappGeneralUrl()} label="WhatsApp" handle="+880 1577-142710">
+              <SocialCard href={whatsappGeneralUrl(undefined, waNumber)} label="WhatsApp" handle="+880 1577-142710">
                 <MessageCircle className="h-6 w-6" />
               </SocialCard>
               <SocialCard href={BRAND.socials.facebook} label="Facebook" handle="/zyvro.official">

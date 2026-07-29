@@ -9,6 +9,7 @@ import { ProductBadges } from "@/components/ProductBadges";
 import { PriceDisplay } from "@/components/PriceDisplay";
 import { SizeGuideButton } from "@/components/SizeGuideButton";
 import { NotifyMeModal } from "@/components/NotifyMeModal";
+import { OrderModal } from "@/components/OrderModal";
 import {
   fetchProductBySlug,
   fetchPublishedProducts,
@@ -19,7 +20,6 @@ import {
   type ProductWithVariants,
 } from "@/lib/products";
 import { fetchColors, fetchSizes } from "@/lib/taxonomy";
-import { whatsappOrderUrl } from "@/lib/config";
 import { formatPrice } from "@/lib/settings";
 import { SITE_URL, abs } from "@/lib/site";
 import { toast } from "sonner";
@@ -126,6 +126,7 @@ function ProductPage() {
   const [selectedSizeId, setSelectedSizeId] = useState<string | null>(null);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [notifyOpen, setNotifyOpen] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
 
   useEffect(() => {
     setActiveImageIdx(0);
@@ -368,21 +369,19 @@ function ProductPage() {
                     <Bell className="h-5 w-5" /> Notify When Available
                   </button>
                 ) : (
-                  <a
-                    href={whatsappOrderUrl({ productName: orderText, price: priceBase, productUrl })}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => {
+                  <button
+                    onClick={() => {
                       if (!canOrder) {
-                        e.preventDefault();
                         toast.error("Please select a size first");
+                        return;
                       }
+                      setOrderOpen(true);
                     }}
                     className={`btn-zy flex-1 !py-4 ${!canOrder ? "opacity-60" : ""}`}
                   >
                     <MessageCircle className="h-5 w-5" />
                     Order on WhatsApp
-                  </a>
+                  </button>
                 )}
                 <button onClick={share} className="btn-zy-outline !py-4 !px-4" aria-label="Share">
                   <Share2 className="h-5 w-5" />
@@ -435,20 +434,18 @@ function ProductPage() {
             <Bell className="h-4 w-4" /> Notify Me
           </button>
         ) : (
-          <a
-            href={whatsappOrderUrl({ productName: orderText, price: priceBase, productUrl })}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => {
+          <button
+            onClick={() => {
               if (!canOrder) {
-                e.preventDefault();
                 toast.error("Please select a size first");
+                return;
               }
+              setOrderOpen(true);
             }}
             className={`btn-zy !py-3 !text-xs shrink-0 ${!canOrder ? "opacity-60" : ""}`}
           >
             <MessageCircle className="h-4 w-4" /> Order
-          </a>
+          </button>
         )}
       </div>
 
@@ -457,6 +454,19 @@ function ProductPage() {
         onClose={() => setNotifyOpen(false)}
         productId={product.id}
         productName={product.name}
+      />
+
+      <OrderModal
+        open={orderOpen}
+        onClose={() => setOrderOpen(false)}
+        product={{
+          id: product.id,
+          name: orderText,
+          url: productUrl,
+          colorName: selectedVariant ? colorMap.get(selectedVariant.color_id)?.name : null,
+          sizeName: selectedSize ? sizeMap.get(selectedSize.size_id)?.name : null,
+          unitPrice: priceBase,
+        }}
       />
 
       <Footer />

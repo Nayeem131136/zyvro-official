@@ -230,3 +230,20 @@
   border-color: #F5E6C8;
   box-shadow: 0 10px 30px -10px rgba(232, 200, 120, 0.5);
 }
+
+.input-zy {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.875rem;
+  color: var(--foreground);
+  outline: none;
+  transition: border-color 200ms;
+}
+.input-zy:focus {
+  border-color: rgba(232, 200, 120, 0.6);
+}
+.input-zy::placeholder {
+  color: oklch(0.55 0 0);
+}

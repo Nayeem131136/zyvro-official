@@ -6,6 +6,9 @@ export type AppSettings = {
   new_arrival_days: number;
   currency_symbol: string;
   low_stock_default: number;
+  whatsapp_number: string;
+  delivery_charge_dhaka: number;
+  delivery_charge_outside_dhaka: number;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -14,6 +17,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   new_arrival_days: 30,
   currency_symbol: "৳",
   low_stock_default: 5,
+  whatsapp_number: "8801577142710",
+  delivery_charge_dhaka: 80,
+  delivery_charge_outside_dhaka: 130,
 };
 
 export async function fetchAppSettings(): Promise<AppSettings> {

@@ -1,4 +1,5 @@
-export const WHATSAPP_NUMBER = "8801577142710";
+export const WHATSAPP_NUMBER = "8801577142710"; // fallback default; live value comes from Admin > Settings
+
 export const BRAND = {
   name: "ZYVRO",
   tagline: "Own Your Style",
@@ -11,19 +12,6 @@ export const BRAND = {
   },
 };
 
-export function whatsappOrderUrl(params: {
-  productName: string;
-  price: number | string;
-  productUrl: string;
-}) {
-  const msg =
-    `Hi ZYVRO! I'm interested in ordering:\n` +
-    `🛒 Product: ${params.productName}\n` +
-    `💰 Price: ৳${params.price}\n` +
-    `🔗 Link: ${params.productUrl}`;
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
-}
-
-export function whatsappGeneralUrl(text = "Hi ZYVRO! I have a question.") {
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
+export function whatsappGeneralUrl(text = "Hi ZYVRO! I have a question.", number: string = WHATSAPP_NUMBER) {
+  return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
 }

@@ -1,9 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { Facebook, MessageCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import logoCleanUrl from "@/assets/zyvro-logo-clean.png";
 import { BRAND, whatsappGeneralUrl } from "@/lib/config";
+import { fetchAppSettings } from "@/lib/settings";
 
 export function Footer() {
+  const { data: settings } = useQuery({ queryKey: ["app-settings"], queryFn: fetchAppSettings });
   return (
     <footer className="border-t border-white/5 bg-[oklch(0.06_0_0)]">
       <div className="mx-auto max-w-7xl px-6 py-16 grid gap-12 md:grid-cols-4">
@@ -32,7 +35,7 @@ export function Footer() {
             <a href={BRAND.socials.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="h-10 w-10 grid place-items-center border border-white/10 hover:border-[color:var(--gold)]/50 hover:text-[color:var(--gold-bright)] transition">
               <Facebook className="h-4 w-4" />
             </a>
-            <a href={whatsappGeneralUrl()} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className="h-10 w-10 grid place-items-center border border-white/10 hover:border-[color:var(--gold)]/50 hover:text-[color:var(--gold-bright)] transition">
+            <a href={whatsappGeneralUrl(undefined, settings?.whatsapp_number)} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className="h-10 w-10 grid place-items-center border border-white/10 hover:border-[color:var(--gold)]/50 hover:text-[color:var(--gold-bright)] transition">
               <MessageCircle className="h-4 w-4" />
             </a>
           </div>

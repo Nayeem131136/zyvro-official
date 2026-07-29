@@ -27,10 +27,23 @@ import {
   type Size,
 } from "@/lib/taxonomy";
 import { ADMIN_EMAIL, uploadProductImage, deleteProductImage } from "@/lib/admin";
+import {
+  fetchOrders,
+  updateOrderStatus,
+  subscribeOrders,
+  buildWhatsappMessage,
+  whatsappUrl,
+  ORDER_STATUS_FLOW,
+  ORDER_STATUS_LABEL,
+  type Order,
+  type OrderStatus,
+} from "@/lib/orders";
+import { fetchAppSettings, upsertAppSetting, formatPrice, type AppSettings } from "@/lib/settings";
 import { toast } from "sonner";
 import {
   Loader2, LogOut, Pencil, Plus, Trash2, X, ExternalLink, Upload, Copy, Palette,
   Ruler, Tag, FolderOpen, Package, ChevronDown, ChevronUp, Image as ImageIcon,
+  LayoutDashboard, ClipboardList, Settings, MessageCircle, Check, Ban,
 } from "lucide-react";
 import logoAsset from "@/assets/zyvro-logo.png";
 
@@ -45,7 +58,7 @@ export const Route = createFileRoute("/admin")({
 });
 
 type AuthState = "loading" | "unauth" | "ok";
-type Tab = "products" | "categories" | "collections" | "colors" | "sizes";
+type Tab = "dashboard" | "orders" | "products" | "collections" | "colors" | "sizes" | "settings";
 
 function AdminPage() {
   const navigate = useNavigate();
@@ -71,10 +84,12 @@ function AdminPage() {
   }, [state, navigate]);
 
   async function signOut() {
-    // Navigate immediately for a snappy feel; sign out locally in the
-    // background instead of waiting on a full network round-trip.
-    navigate({ to: "/admin/login" });
+    // scope: "local" clears the session immediately (no network round-trip),
+    // so this resolves fast. We must await it BEFORE navigating, otherwise
+    // /admin/login's own auth-check can still see the old session and bounce
+    // straight back to /admin, causing a stuck/blank screen.
     await supabase.auth.signOut({ scope: "local" });
+    navigate({ to: "/admin/login" });
   }
 
   if (state !== "ok") {
@@ -88,13 +103,15 @@ function AdminPage() {
 }
 
 function AdminDashboard({ email, onSignOut }: { email: string; onSignOut: () => void }) {
-  const [tab, setTab] = useState<Tab>("products");
+  const [tab, setTab] = useState<Tab>("dashboard");
   const tabs: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "orders", label: "Orders", icon: ClipboardList },
     { id: "products", label: "Products", icon: Package },
-    { id: "categories", label: "Categories", icon: FolderOpen },
     { id: "collections", label: "Collections", icon: Tag },
     { id: "colors", label: "Colors", icon: Palette },
     { id: "sizes", label: "Sizes", icon: Ruler },
+    { id: "settings", label: "Settings", icon: Settings },
   ];
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -138,11 +155,13 @@ function AdminDashboard({ email, onSignOut }: { email: string; onSignOut: () => 
       </div>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
+        {tab === "dashboard" && <DashboardTab onNavigate={setTab} />}
+        {tab === "orders" && <OrdersTab />}
         {tab === "products" && <ProductsTab />}
-        {tab === "categories" && <TaxonomyTab kind="categories" />}
         {tab === "collections" && <TaxonomyTab kind="collections" />}
         {tab === "colors" && <TaxonomyTab kind="colors" />}
         {tab === "sizes" && <TaxonomyTab kind="sizes" />}
+        {tab === "settings" && <SettingsTab />}
       </main>
     </div>
   );
@@ -569,7 +588,7 @@ function EditorForm({
         slug,
         short_description: s.short_description || null,
         description: s.description || null,
-        category_id: s.category_id || null,
+        category_id: s.category_id || categories[0]?.id || null,
         collection_id: s.collection_id || null,
         tags: s.tags.split(",").map((t) => t.trim()).filter(Boolean),
         thumbnail_url: s.thumbnail_url || null,
@@ -681,12 +700,6 @@ function EditorForm({
           <textarea rows={5} value={s.description} onChange={(e) => update("description", e.target.value)} className={inputCls} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Category">
-            <select value={s.category_id} onChange={(e) => update("category_id", e.target.value)} className={inputCls}>
-              <option value="">— None —</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </Field>
           <Field label="Collection">
             <select value={s.collection_id} onChange={(e) => update("collection_id", e.target.value)} className={inputCls}>
               <option value="">— None —</option>
@@ -1179,3 +1192,380 @@ function UploadBtn({ label, onFiles, multiple }: { label: string; onFiles: (f: F
 
 const inputCls =
   "w-full bg-transparent border border-white/10 px-3 py-2 text-sm focus:border-[color:var(--gold)]/60 outline-none";
+
+/* ============ DASHBOARD TAB ============ */
+
+function DashboardTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
+  const { data: orders = [], isLoading: ordersLoading } = useQuery({
+    queryKey: ["admin", "orders"],
+    queryFn: fetchOrders,
+  });
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ["admin", "products"],
+    queryFn: fetchAllProductsAdmin,
+  });
+
+  const today = new Date().toDateString();
+  const todayOrders = orders.filter((o) => new Date(o.created_at).toDateString() === today);
+  const pending = orders.filter((o) => o.status === "pending");
+  const confirmed = orders.filter((o) => o.status === "confirmed");
+  const delivered = orders.filter((o) => o.status === "delivered");
+  const cancelled = orders.filter((o) => o.status === "cancelled" || o.status === "rejected");
+  const lowStock = products.filter(
+    (p: any) => (p.total_stock ?? 0) > 0 && (p.total_stock ?? 0) <= (p.low_stock_threshold ?? 5),
+  );
+
+  const cards = [
+    { label: "Pending Orders", value: pending.length, tab: "orders" as Tab, accent: true },
+    { label: "Today's Orders", value: todayOrders.length, tab: "orders" as Tab },
+    { label: "Confirmed Orders", value: confirmed.length, tab: "orders" as Tab },
+    { label: "Delivered Orders", value: delivered.length, tab: "orders" as Tab },
+    { label: "Cancelled / Rejected", value: cancelled.length, tab: "orders" as Tab },
+    { label: "Total Products", value: products.length, tab: "products" as Tab },
+    { label: "Low Stock Products", value: lowStock.length, tab: "products" as Tab, accent: lowStock.length > 0 },
+  ];
+
+  if (ordersLoading || productsLoading) {
+    return <div className="grid place-items-center py-24"><Loader2 className="h-6 w-6 animate-spin text-[color:var(--gold-bright)]" /></div>;
+  }
+
+  return (
+    <div>
+      <h1 className="font-display text-2xl mb-6">Dashboard</h1>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        {cards.map((c) => (
+          <button
+            key={c.label}
+            onClick={() => onNavigate(c.tab)}
+            className={`text-left border p-4 transition hover:border-[color:var(--gold)]/50 ${
+              c.accent ? "border-[color:var(--gold)]/50 bg-[color:var(--gold)]/5" : "border-white/10"
+            }`}
+          >
+            <div className={`font-display text-3xl ${c.accent ? "text-[color:var(--gold-bright)]" : ""}`}>{c.value}</div>
+            <div className="text-[11px] tracked-wide text-muted-foreground mt-1">{c.label}</div>
+          </button>
+        ))}
+      </div>
+
+      <h2 className="font-display text-lg mb-4">Recent Orders</h2>
+      <div className="border border-white/10 divide-y divide-white/5">
+        {orders.slice(0, 6).map((o) => (
+          <div key={o.id} className="px-4 py-3 flex items-center justify-between text-sm">
+            <div>
+              <div className="font-display tracked-wide text-xs">{o.order_no} — {o.customer_name}</div>
+              <div className="text-[11px] text-muted-foreground">{o.product_name} · {o.quantity}x · {formatPrice(o.total_price)}</div>
+            </div>
+            <OrderStatusPill status={o.status} />
+          </div>
+        ))}
+        {orders.length === 0 && (
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">No orders yet.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============ ORDERS TAB ============ */
+
+function OrderStatusPill({ status }: { status: OrderStatus }) {
+  const styles: Record<OrderStatus, string> = {
+    pending: "border-amber-400/40 text-amber-300 bg-amber-400/10",
+    confirmed: "border-emerald-400/40 text-emerald-300 bg-emerald-400/10",
+    printing: "border-sky-400/40 text-sky-300 bg-sky-400/10",
+    packed: "border-sky-400/40 text-sky-300 bg-sky-400/10",
+    shipped: "border-violet-400/40 text-violet-300 bg-violet-400/10",
+    delivered: "border-[color:var(--gold)]/50 text-[color:var(--gold-bright)] bg-[color:var(--gold)]/10",
+    cancelled: "border-white/20 text-muted-foreground bg-white/5",
+    rejected: "border-red-400/40 text-red-300 bg-red-400/10",
+  };
+  return (
+    <span className={`text-[10px] tracked-wide px-2 py-1 border rounded-full ${styles[status]}`}>
+      {ORDER_STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+function OrdersTab() {
+  const qc = useQueryClient();
+  const { data: orders = [], isLoading } = useQuery({
+    queryKey: ["admin", "orders"],
+    queryFn: fetchOrders,
+  });
+  const [filter, setFilter] = useState<"all" | OrderStatus>("all");
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = subscribeOrders(() => {
+      qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+    });
+    return unsub;
+  }, [qc]);
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: OrderStatus }) => updateOrderStatus(id, status),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+      toast.success("Order updated");
+    },
+    onError: () => toast.error("Failed to update order"),
+  });
+
+  const filtered = filter === "all" ? orders : orders.filter((o) => o.status === filter);
+  const filters: { id: "all" | OrderStatus; label: string }[] = [
+    { id: "all", label: "All" },
+    { id: "pending", label: "Pending" },
+    { id: "confirmed", label: "Confirmed" },
+    { id: "printing", label: "Printing" },
+    { id: "packed", label: "Packed" },
+    { id: "shipped", label: "Shipped" },
+    { id: "delivered", label: "Delivered" },
+    { id: "cancelled", label: "Cancelled" },
+    { id: "rejected", label: "Rejected" },
+  ];
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="font-display text-2xl">Orders</h1>
+        <span className="text-xs text-muted-foreground">{orders.length} total</span>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-6">
+        {filters.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setFilter(f.id)}
+            className={`text-[11px] tracked-wide px-3 py-1.5 border transition ${
+              filter === f.id
+                ? "border-[color:var(--gold)] text-[color:var(--gold-bright)]"
+                : "border-white/10 text-muted-foreground hover:border-white/30"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="grid place-items-center py-24"><Loader2 className="h-6 w-6 animate-spin text-[color:var(--gold-bright)]" /></div>
+      ) : filtered.length === 0 ? (
+        <div className="border border-white/10 px-4 py-16 text-center text-sm text-muted-foreground">No orders in this view.</div>
+      ) : (
+        <div className="border border-white/10 divide-y divide-white/5">
+          {filtered.map((o) => {
+            const isOpen = expanded === o.id;
+            const nextStep = ORDER_STATUS_FLOW[ORDER_STATUS_FLOW.indexOf(o.status) + 1];
+            return (
+              <div key={o.id}>
+                <button
+                  onClick={() => setExpanded(isOpen ? null : o.id)}
+                  className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-white/[0.02]"
+                >
+                  <div className="min-w-0">
+                    <div className="font-display tracked-wide text-xs flex items-center gap-2">
+                      {o.order_no}
+                      <span className="text-muted-foreground font-sans normal-case tracking-normal">— {o.customer_name}</span>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                      {o.product_name} {o.color_name ? `· ${o.color_name}` : ""} {o.size_name ? `· ${o.size_name}` : ""} · {o.quantity}x · {formatPrice(o.total_price)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 ml-3">
+                    <OrderStatusPill status={o.status} />
+                    {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                  </div>
+                </button>
+
+                {isOpen && (
+                  <div className="px-4 pb-4 pt-1 space-y-4 bg-white/[0.015]">
+                    <div className="grid sm:grid-cols-2 gap-4 text-xs">
+                      <div className="space-y-1">
+                        <div className="text-muted-foreground">Phone</div>
+                        <div>{o.phone}</div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-muted-foreground">Location</div>
+                        <div>{o.area}, {o.district}</div>
+                      </div>
+                      <div className="space-y-1 sm:col-span-2">
+                        <div className="text-muted-foreground">Address</div>
+                        <div>{o.address}</div>
+                      </div>
+                      {o.note && (
+                        <div className="space-y-1 sm:col-span-2">
+                          <div className="text-muted-foreground">Note</div>
+                          <div className="italic">{o.note}</div>
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <div className="text-muted-foreground">Unit / Delivery / Total</div>
+                        <div>{formatPrice(o.unit_price)} + {formatPrice(o.delivery_charge)} = <span className="text-[color:var(--gold-bright)]">{formatPrice(o.total_price)}</span></div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-muted-foreground">Created</div>
+                        <div>{new Date(o.created_at).toLocaleString()}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
+                      {o.status === "pending" && (
+                        <>
+                          <button
+                            onClick={() => statusMutation.mutate({ id: o.id, status: "confirmed" })}
+                            className="text-[11px] tracked-wide px-3 py-2 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-400/10 inline-flex items-center gap-1.5"
+                          >
+                            <Check className="h-3.5 w-3.5" /> Confirm Order
+                          </button>
+                          <button
+                            onClick={() => statusMutation.mutate({ id: o.id, status: "rejected" })}
+                            className="text-[11px] tracked-wide px-3 py-2 border border-red-400/40 text-red-300 hover:bg-red-400/10 inline-flex items-center gap-1.5"
+                          >
+                            <Ban className="h-3.5 w-3.5" /> Reject Order
+                          </button>
+                        </>
+                      )}
+                      {nextStep && !["pending", "cancelled", "rejected"].includes(o.status) && (
+                        <button
+                          onClick={() => statusMutation.mutate({ id: o.id, status: nextStep })}
+                          className="text-[11px] tracked-wide px-3 py-2 border border-[color:var(--gold)]/50 text-[color:var(--gold-bright)] hover:bg-[color:var(--gold)]/10 inline-flex items-center gap-1.5"
+                        >
+                          Move to {ORDER_STATUS_LABEL[nextStep]}
+                        </button>
+                      )}
+                      {!["delivered", "cancelled", "rejected"].includes(o.status) && (
+                        <button
+                          onClick={() => statusMutation.mutate({ id: o.id, status: "cancelled" })}
+                          className="text-[11px] tracked-wide px-3 py-2 border border-white/15 text-muted-foreground hover:border-white/30"
+                        >
+                          Cancel Order
+                        </button>
+                      )}
+                      <a
+                        href={whatsappUrl(o.phone.replace(/\D/g, ""), buildWhatsappMessage(o))}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] tracked-wide px-3 py-2 border border-white/15 hover:border-white/30 inline-flex items-center gap-1.5 ml-auto"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" /> Message Customer
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============ SETTINGS TAB ============ */
+
+function SettingsTab() {
+  const qc = useQueryClient();
+  const { data: settings, isLoading } = useQuery({ queryKey: ["app-settings"], queryFn: fetchAppSettings });
+  const [form, setForm] = useState<AppSettings | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (settings && !form) setForm(settings);
+  }, [settings, form]);
+
+  if (isLoading || !form) {
+    return <div className="grid place-items-center py-24"><Loader2 className="h-6 w-6 animate-spin text-[color:var(--gold-bright)]" /></div>;
+  }
+
+  async function save() {
+    if (!form) return;
+    setSaving(true);
+    try {
+      await Promise.all([
+        upsertAppSetting("whatsapp_number", form.whatsapp_number),
+        upsertAppSetting("delivery_charge_dhaka", form.delivery_charge_dhaka),
+        upsertAppSetting("delivery_charge_outside_dhaka", form.delivery_charge_outside_dhaka),
+        upsertAppSetting("brand_name", form.brand_name),
+        upsertAppSetting("currency_symbol", form.currency_symbol),
+        upsertAppSetting("low_stock_default", form.low_stock_default),
+      ]);
+      qc.invalidateQueries({ queryKey: ["app-settings"] });
+      toast.success("Settings saved");
+    } catch (err) {
+      console.error(err);
+      toast.error("Couldn't save settings");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="max-w-xl">
+      <h1 className="font-display text-2xl mb-6">Settings</h1>
+
+      <div className="space-y-5">
+        <div>
+          <label className="text-xs tracked-wide text-muted-foreground">WHATSAPP NUMBER (international format, no + or leading 0)</label>
+          <input
+            value={form.whatsapp_number}
+            onChange={(e) => setForm({ ...form, whatsapp_number: e.target.value })}
+            className={inputCls}
+            placeholder="8801XXXXXXXXX"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs tracked-wide text-muted-foreground">DELIVERY CHARGE — DHAKA (৳)</label>
+            <input
+              type="number"
+              value={form.delivery_charge_dhaka}
+              onChange={(e) => setForm({ ...form, delivery_charge_dhaka: Number(e.target.value) || 0 })}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="text-xs tracked-wide text-muted-foreground">DELIVERY CHARGE — OUTSIDE DHAKA (৳)</label>
+            <input
+              type="number"
+              value={form.delivery_charge_outside_dhaka}
+              onChange={(e) => setForm({ ...form, delivery_charge_outside_dhaka: Number(e.target.value) || 0 })}
+              className={inputCls}
+            />
+          </div>
+        </div>
+        <div className="h-px bg-white/10 my-2" />
+        <div>
+          <label className="text-xs tracked-wide text-muted-foreground">BRAND NAME</label>
+          <input
+            value={form.brand_name}
+            onChange={(e) => setForm({ ...form, brand_name: e.target.value })}
+            className={inputCls}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs tracked-wide text-muted-foreground">CURRENCY SYMBOL</label>
+            <input
+              value={form.currency_symbol}
+              onChange={(e) => setForm({ ...form, currency_symbol: e.target.value })}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="text-xs tracked-wide text-muted-foreground">LOW STOCK THRESHOLD (DEFAULT)</label>
+            <input
+              type="number"
+              value={form.low_stock_default}
+              onChange={(e) => setForm({ ...form, low_stock_default: Number(e.target.value) || 0 })}
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        <button onClick={save} disabled={saving} className="btn-zy !py-3 mt-2 disabled:opacity-60">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Settings"}
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -54,7 +54,12 @@ function AuthPage() {
         navigate({ to: "/" });
       }
     } catch (err: any) {
-      toast.error(err.message ?? "Authentication failed");
+      const msg: string = err?.message ?? "Authentication failed";
+      if (/email not confirmed/i.test(msg)) {
+        toast.error("Please confirm your email first — check your inbox for the confirmation link.");
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }

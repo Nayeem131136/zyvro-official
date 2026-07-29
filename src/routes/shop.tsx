@@ -5,7 +5,7 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { ProductCard, ProductCardSkeleton } from "@/components/ProductCard";
 import { fetchPublishedProducts, effectivePrice } from "@/lib/products";
-import { fetchCategories } from "@/lib/taxonomy";
+import { fetchCollections } from "@/lib/taxonomy";
 
 export const Route = createFileRoute("/shop")({
   component: ShopPage,
@@ -24,17 +24,17 @@ function ShopPage() {
     queryKey: ["products", "published"],
     queryFn: fetchPublishedProducts,
   });
-  const { data: categories = [] } = useQuery({ queryKey: ["categories"], queryFn: fetchCategories });
-  const [categoryId, setCategoryId] = useState<string>("all");
+  const { data: collections = [] } = useQuery({ queryKey: ["collections"], queryFn: fetchCollections });
+  const [collectionId, setCollectionId] = useState<string>("all");
   const [sort, setSort] = useState<"new" | "low" | "high">("new");
 
   const products = data ?? [];
   const filtered = useMemo(() => {
-    let out = categoryId === "all" ? products : products.filter((p) => p.category_id === categoryId);
+    let out = collectionId === "all" ? products : products.filter((p) => p.collection_id === collectionId);
     if (sort === "low") out = [...out].sort((a, b) => effectivePrice(a) - effectivePrice(b));
     if (sort === "high") out = [...out].sort((a, b) => effectivePrice(b) - effectivePrice(a));
     return out;
-  }, [products, categoryId, sort]);
+  }, [products, collectionId, sort]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -49,9 +49,9 @@ function ShopPage() {
 
           <div className="mb-10 flex flex-wrap items-center justify-between gap-4 border-y border-white/5 py-4">
             <div className="flex flex-wrap gap-2">
-              <FilterBtn active={categoryId === "all"} onClick={() => setCategoryId("all")}>All</FilterBtn>
-              {categories.map((c) => (
-                <FilterBtn key={c.id} active={categoryId === c.id} onClick={() => setCategoryId(c.id)}>
+              <FilterBtn active={collectionId === "all"} onClick={() => setCollectionId("all")}>All</FilterBtn>
+              {collections.map((c) => (
+                <FilterBtn key={c.id} active={collectionId === c.id} onClick={() => setCollectionId(c.id)}>
                   {c.name}
                 </FilterBtn>
               ))}
