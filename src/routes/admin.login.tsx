@@ -53,7 +53,7 @@ function AdminLoginPage() {
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <Link to="/" className="flex flex-col items-center gap-3 mb-8">
-          <img src={logoAsset.url} alt="ZYVRO" className="h-14 w-14" />
+          <img src={logoAsset} alt="ZYVRO" className="h-14 w-14" />
           <span className="font-display text-2xl tracked-wide gold-gradient-text">ZYVRO</span>
         </Link>
 

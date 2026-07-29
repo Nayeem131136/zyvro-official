@@ -37,7 +37,7 @@ function HomePage() {
 
       <section className="relative w-full bg-background">
         <img
-          src={heroBannerAsset.url}
+          src={heroBannerAsset}
           alt="ZYVRO — Built Different. Premium streetwear banner."
           className="w-full h-auto max-w-full object-contain"
           width={960}
@@ -123,7 +123,7 @@ function HomePage() {
           </Reveal>
           <Reveal delay={200}>
             <div className="relative aspect-[4/5] border border-white/10 overflow-hidden">
-              <img src={heroAsset.url} alt="ZYVRO philosophy" className="h-full w-full object-cover object-right" />
+              <img src={heroAsset} alt="ZYVRO philosophy" className="h-full w-full object-cover object-right" />
               <div className="absolute inset-0 bg-gradient-to-tr from-black/70 to-transparent" />
               <div className="absolute bottom-6 left-6 right-6">
                 <div className="font-display text-3xl gold-gradient-text">Own Your Style.</div>

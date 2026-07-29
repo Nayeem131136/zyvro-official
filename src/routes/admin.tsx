@@ -71,8 +71,10 @@ function AdminPage() {
   }, [state, navigate]);
 
   async function signOut() {
-    await supabase.auth.signOut();
+    // Navigate immediately for a snappy feel; sign out locally in the
+    // background instead of waiting on a full network round-trip.
     navigate({ to: "/admin/login" });
+    await supabase.auth.signOut({ scope: "local" });
   }
 
   if (state !== "ok") {
@@ -99,7 +101,7 @@ function AdminDashboard({ email, onSignOut }: { email: string; onSignOut: () => 
       <header className="border-b border-white/10 sticky top-0 bg-background/90 backdrop-blur z-20">
         <div className="mx-auto max-w-7xl px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={logoAsset.url} alt="" className="h-8 w-8" />
+            <img src={logoAsset} alt="" className="h-8 w-8" />
             <div>
               <div className="font-display tracked-wide text-sm gold-gradient-text">ZYVRO ADMIN</div>
               <div className="text-[10px] text-muted-foreground">{email}</div>

@@ -25,8 +25,10 @@ export function Navbar() {
   }, []);
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
     setOpen(false);
+    // scope: "local" clears the session immediately without waiting on a
+    // network round-trip, so the UI updates instantly instead of hanging.
+    await supabase.auth.signOut({ scope: "local" });
   }
 
 
@@ -57,6 +59,24 @@ export function Navbar() {
         </nav>
 
         <div className="flex items-center gap-2">
+          {!adminLoading && !isSignedIn && (
+            <div className="hidden sm:flex items-center gap-2">
+              <Link
+                to="/auth"
+                search={{ mode: "signin" }}
+                className="inline-flex items-center h-10 px-4 rounded-full border border-white/15 text-[11px] font-display tracked-wide text-foreground/90 hover:text-[color:var(--gold-bright)] hover:border-[color:var(--gold)]/50 transition"
+              >
+                SIGN IN
+              </Link>
+              <Link
+                to="/auth"
+                search={{ mode: "signup" }}
+                className="inline-flex items-center h-10 px-4 rounded-full bg-[color:var(--gold)]/90 text-black text-[11px] font-display tracked-wide hover:bg-[color:var(--gold-bright)] transition shadow-[0_0_20px_-6px_rgba(232,200,120,0.6)]"
+              >
+                SIGN UP
+              </Link>
+            </div>
+          )}
           {!adminLoading && isAdmin && (
             <>
               <Link
@@ -100,6 +120,26 @@ export function Navbar() {
                 {l.label}
               </Link>
             ))}
+            {!adminLoading && !isSignedIn && (
+              <div className="flex items-center gap-3 pt-2">
+                <Link
+                  to="/auth"
+                  search={{ mode: "signin" }}
+                  onClick={() => setOpen(false)}
+                  className="flex-1 text-center h-11 inline-flex items-center justify-center rounded-full border border-white/15 font-display tracked-wide text-sm text-foreground/90"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  to="/auth"
+                  search={{ mode: "signup" }}
+                  onClick={() => setOpen(false)}
+                  className="flex-1 text-center h-11 inline-flex items-center justify-center rounded-full bg-[color:var(--gold)]/90 text-black font-display tracked-wide text-sm"
+                >
+                  Sign Up
+                </Link>
+              </div>
+            )}
             {!adminLoading && isAdmin && (
               <Link
                 to="/admin"

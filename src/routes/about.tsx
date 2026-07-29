@@ -31,11 +31,11 @@ function AboutPage() {
       <Navbar />
 
       <section className="relative pt-32 pb-20 overflow-hidden">
-        <img src={heroAsset.url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25" />
+        <img src={heroAsset} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25" />
         <div className="absolute inset-0 bg-gradient-to-b from-background via-background/70 to-background" />
         <div className="relative mx-auto max-w-5xl px-6 text-center">
           <Reveal>
-            <img src={logoAsset.url} alt="ZYVRO" className="mx-auto h-24 md:h-32" />
+            <img src={logoAsset} alt="ZYVRO" className="mx-auto h-24 md:h-32" />
           </Reveal>
           <Reveal delay={200}>
             <h1 className="mt-8 font-display text-6xl md:text-8xl">

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, ArrowLeft } from "lucide-react";
-import logoAsset from "@/assets/zyvro-logo.png.asset.json";
+import logoAsset from "@/assets/zyvro-logo.png";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -70,7 +70,7 @@ function AuthPage() {
       </Link>
       <div className="w-full max-w-md">
         <Link to="/" className="flex flex-col items-center gap-3 mb-8">
-          <img src={logoAsset.url} alt="ZYVRO" className="h-14 w-14" />
+          <img src={logoAsset} alt="ZYVRO" className="h-14 w-14" />
           <span className="font-display text-2xl tracked-wide gold-gradient-text">ZYVRO</span>
         </Link>
 
