@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Reveal } from "@/components/Reveal";
-import logoAsset from "@/assets/zyvro-logo.png.asset.json";
-import heroAsset from "@/assets/zyvro-hero.png.asset.json";
+import logoAsset from "@/assets/zyvro-logo.png";
+import heroAsset from "@/assets/zyvro-hero.png";
 import { BRAND } from "@/lib/config";
 
 export const Route = createFileRoute("/about")({

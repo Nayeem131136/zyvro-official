@@ -32,7 +32,7 @@ import {
   Loader2, LogOut, Pencil, Plus, Trash2, X, ExternalLink, Upload, Copy, Palette,
   Ruler, Tag, FolderOpen, Package, ChevronDown, ChevronUp, Image as ImageIcon,
 } from "lucide-react";
-import logoAsset from "@/assets/zyvro-logo.png.asset.json";
+import logoAsset from "@/assets/zyvro-logo.png";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,

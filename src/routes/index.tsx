@@ -9,8 +9,8 @@ import { ProductCard, ProductCardSkeleton } from "@/components/ProductCard";
 import { AutoSection } from "@/components/AutoSection";
 import { fetchPublishedProducts } from "@/lib/products";
 
-import heroBannerAsset from "@/assets/zyvro-hero-banner.png.asset.json";
-import heroAsset from "@/assets/zyvro-hero.png.asset.json";
+import heroBannerAsset from "@/assets/zyvro-hero-banner.png";
+import heroAsset from "@/assets/zyvro-hero.png";
 
 export const Route = createFileRoute("/")({
   component: HomePage,

@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { ADMIN_EMAIL } from "@/lib/admin";
-import logoAsset from "@/assets/zyvro-logo.png.asset.json";
+import logoAsset from "@/assets/zyvro-logo.png";
 
 export const Route = createFileRoute("/admin/login")({
   component: AdminLoginPage,
