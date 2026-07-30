@@ -38,40 +38,80 @@ export function useAdminSession(): AdminState {
 
 /**
  * Resize + re-encode an image in the browser before upload, so large phone/DSLR
- * photos (often 20-30MB) don't eat storage/bandwidth quota or slow page loads.
+ * photos (often 20-65MB) don't eat storage/bandwidth quota or slow page loads.
  * Caps the longest side at maxDimension and re-encodes as JPEG at the given quality.
+ *
+ * Hardened: never hangs forever and never blocks the upload — if anything about
+ * compression fails or takes too long, it falls back to uploading the original file.
  */
-async function compressImage(file: File, maxDimension = 1600, quality = 0.82): Promise<Blob> {
+async function compressImage(file: File, maxDimension = 1600, quality = 0.82): Promise<Blob | File> {
   // Skip compression for already-small files or non-image types (safety fallback).
   if (!file.type.startsWith("image/") || file.size < 300 * 1024) return file;
 
+  try {
+    console.log(`[upload] compressing ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)...`);
+    const result = await withTimeout(compressImageInner(file, maxDimension, quality), 25000);
+    console.log(`[upload] compressed to ${(result.size / 1024).toFixed(0)}KB`);
+    return result;
+  } catch (e) {
+    console.warn("[upload] compression failed/timed out, uploading original file instead:", e);
+    return file;
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
+
+async function compressImageInner(file: File, maxDimension: number, quality: number): Promise<Blob> {
   const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
-  const width = Math.round(bitmap.width * scale);
-  const height = Math.round(bitmap.height * scale);
+  try {
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+    const width = Math.round(bitmap.width * scale);
+    const height = Math.round(bitmap.height * scale);
 
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return file; // fallback: upload original if canvas unsupported
-  ctx.drawImage(bitmap, 0, 0, width, height);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas 2D context unavailable");
+    ctx.drawImage(bitmap, 0, 0, width, height);
 
-  const blob: Blob | null = await new Promise((resolve) =>
-    canvas.toBlob((b) => resolve(b), "image/jpeg", quality),
-  );
-  return blob ?? file;
+    const blob: Blob | null = await new Promise((resolve) =>
+      canvas.toBlob((b) => resolve(b), "image/jpeg", quality),
+    );
+    if (!blob) throw new Error("canvas.toBlob returned null");
+    return blob;
+  } finally {
+    bitmap.close();
+  }
 }
 
 /** Upload image to the private 'products' bucket and return a long-lived signed URL. */
 export async function uploadProductImage(file: File): Promise<{ path: string; url: string }> {
+  console.log(`[upload] starting upload for ${file.name}`);
   const compressed = await compressImage(file);
   const path = `${crypto.randomUUID()}.jpg`;
-  const { error } = await supabase.storage
-    .from(PRODUCTS_BUCKET)
-    .upload(path, compressed, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false });
-  if (error) throw error;
+  console.log(`[upload] sending to storage as ${path} (${(compressed.size / 1024).toFixed(0)}KB)...`);
+  const { error } = await withTimeout(
+    supabase.storage
+      .from(PRODUCTS_BUCKET)
+      .upload(path, compressed, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false }),
+    30000,
+  );
+  if (error) {
+    console.error("[upload] storage upload failed:", error);
+    throw error;
+  }
+  console.log("[upload] storage upload succeeded, creating signed URL...");
   const url = await getProductImageUrl(path);
+  console.log("[upload] done:", url);
   return { path, url };
 }
 
