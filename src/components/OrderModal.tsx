@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { fetchAppSettings } from "@/lib/settings";
 import { formatPrice } from "@/lib/settings";
 import { createOrder, buildWhatsappMessage, whatsappUrl, type Order } from "@/lib/orders";
+import { supabase } from "@/integrations/supabase/client";
 
 type OrderModalProps = {
   open: boolean;
@@ -19,13 +20,14 @@ type OrderModalProps = {
   };
 };
 
-const DHAKA_LABEL = "Dhaka";
+type DeliveryZone = "dhaka" | "dhaka_sub" | "outside";
 
 export function OrderModal({ open, onClose, product }: OrderModalProps) {
   const { data: settings } = useQuery({ queryKey: ["app-settings"], queryFn: fetchAppSettings });
 
   const [step, setStep] = useState<1 | 2>(1);
   const [submitting, setSubmitting] = useState(false);
+  const [zone, setZone] = useState<DeliveryZone>("dhaka");
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -38,10 +40,13 @@ export function OrderModal({ open, onClose, product }: OrderModalProps) {
 
   if (!open) return null;
 
-  const isDhaka = form.district.trim().toLowerCase() === DHAKA_LABEL.toLowerCase();
-  const deliveryCharge = isDhaka
-    ? settings?.delivery_charge_dhaka ?? 80
-    : settings?.delivery_charge_outside_dhaka ?? 130;
+  const deliveryCharge =
+    zone === "dhaka"
+      ? settings?.delivery_charge_dhaka ?? 80
+      : zone === "dhaka_sub"
+        ? settings?.delivery_charge_dhaka_sub ?? 100
+        : settings?.delivery_charge_outside_dhaka ?? 130;
+  const zoneLabel = zone === "dhaka" ? "Dhaka City" : zone === "dhaka_sub" ? "Dhaka Sub-area" : "Outside Dhaka";
   const subtotal = product.unitPrice * form.quantity;
   const total = subtotal + deliveryCharge;
 
@@ -61,13 +66,14 @@ export function OrderModal({ open, onClose, product }: OrderModalProps) {
   async function confirmOrder() {
     setSubmitting(true);
     try {
+      const { data: userData } = await supabase.auth.getUser();
       const order: Order = await createOrder({
         customer_name: form.name.trim(),
         phone: form.phone.trim(),
         district: form.district.trim(),
         area: form.area.trim(),
         address: form.address.trim(),
-        note: form.note.trim() || undefined,
+        note: [`Delivery Zone: ${zoneLabel}`, form.note.trim()].filter(Boolean).join(" — "),
         product_id: product.id,
         product_name: product.name,
         product_url: product.url,
@@ -77,6 +83,7 @@ export function OrderModal({ open, onClose, product }: OrderModalProps) {
         unit_price: product.unitPrice,
         delivery_charge: deliveryCharge,
         total_price: total,
+        customer_user_id: userData.user?.id ?? null,
       });
 
       const number = settings?.whatsapp_number || "8801577142710";
@@ -87,6 +94,7 @@ export function OrderModal({ open, onClose, product }: OrderModalProps) {
       onClose();
       setStep(1);
       setForm({ name: "", phone: "", district: "", area: "", address: "", note: "", quantity: 1 });
+      setZone("dhaka");
     } catch (err) {
       console.error(err);
       toast.error("Couldn't save your order. Please try again.");
@@ -118,6 +126,30 @@ export function OrderModal({ open, onClose, product }: OrderModalProps) {
 
         {step === 1 && (
           <form onSubmit={goToSummary} className="px-6 py-6 space-y-4">
+            <Field label="Delivery Zone *">
+              <div className="grid grid-cols-3 gap-2">
+                {(
+                  [
+                    ["dhaka", "Dhaka City"],
+                    ["dhaka_sub", "Dhaka Sub-area"],
+                    ["outside", "Outside Dhaka"],
+                  ] as [DeliveryZone, string][]
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setZone(value)}
+                    className={`px-2 py-2 text-[11px] tracked-wide border transition ${
+                      zone === value
+                        ? "border-[color:var(--gold)] text-[color:var(--gold-bright)] bg-[color:var(--gold)]/10"
+                        : "border-white/10 text-muted-foreground hover:border-white/30"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </Field>
             <Field label="Full Name *">
               <input
                 required
@@ -198,6 +230,7 @@ export function OrderModal({ open, onClose, product }: OrderModalProps) {
               {product.colorName && <SummaryRow label="Color" value={product.colorName} />}
               {product.sizeName && <SummaryRow label="Size" value={product.sizeName} />}
               <SummaryRow label="Quantity" value={String(form.quantity)} />
+              <SummaryRow label="Delivery Zone" value={zoneLabel} />
               <div className="h-px bg-white/10 my-2" />
               <SummaryRow label="Unit Price" value={formatPrice(product.unitPrice)} />
               <SummaryRow label="Subtotal" value={formatPrice(subtotal)} />

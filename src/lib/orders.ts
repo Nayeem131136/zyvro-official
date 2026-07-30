@@ -49,6 +49,10 @@ export type Order = {
   delivery_charge: number;
   total_price: number;
   status: OrderStatus;
+  customer_user_id: string | null;
+  steadfast_consignment_id: string | null;
+  steadfast_tracking_code: string | null;
+  steadfast_status: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -69,6 +73,7 @@ export type NewOrderInput = {
   unit_price: number;
   delivery_charge: number;
   total_price: number;
+  customer_user_id?: string | null;
 };
 
 /** Customer-facing: create a Pending order. Public insert, no login required. */
@@ -84,6 +89,16 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
 
 /** Admin-only: list all orders, newest first. */
 export async function fetchOrders(): Promise<Order[]> {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as Order[];
+}
+
+/** Customer-facing: list the signed-in customer's own orders (RLS-scoped). */
+export async function fetchMyOrders(): Promise<Order[]> {
   const { data, error } = await supabase
     .from("orders")
     .select("*")

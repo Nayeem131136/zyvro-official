@@ -8,6 +8,7 @@ export type AppSettings = {
   low_stock_default: number;
   whatsapp_number: string;
   delivery_charge_dhaka: number;
+  delivery_charge_dhaka_sub: number;
   delivery_charge_outside_dhaka: number;
 };
 
@@ -19,6 +20,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   low_stock_default: 5,
   whatsapp_number: "8801577142710",
   delivery_charge_dhaka: 80,
+  delivery_charge_dhaka_sub: 100,
   delivery_charge_outside_dhaka: 130,
 };
 

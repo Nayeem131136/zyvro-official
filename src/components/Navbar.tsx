@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Menu, X, ShieldCheck, LogOut } from "lucide-react";
+import { Menu, X, ShieldCheck, LogOut, Package } from "lucide-react";
 import logoCleanUrl from "@/assets/zyvro-logo-clean.png";
 import { useAdminSession } from "@/lib/admin";
 import { supabase } from "@/integrations/supabase/client";
@@ -77,6 +77,14 @@ export function Navbar() {
               </Link>
             </div>
           )}
+          {!adminLoading && isSignedIn && !isAdmin && (
+            <Link
+              to="/account"
+              className="hidden sm:inline-flex items-center gap-1.5 h-10 px-3 rounded-full border border-white/10 text-[10px] font-display tracked-wide text-foreground/80 hover:border-white/30 transition"
+            >
+              <Package className="h-3.5 w-3.5" /> MY ORDERS
+            </Link>
+          )}
           {!adminLoading && isAdmin && (
             <>
               <Link
@@ -139,6 +147,15 @@ export function Navbar() {
                   Sign Up
                 </Link>
               </div>
+            )}
+            {!adminLoading && isSignedIn && !isAdmin && (
+              <Link
+                to="/account"
+                onClick={() => setOpen(false)}
+                className="font-display tracked-wide text-foreground/80 inline-flex items-center gap-2"
+              >
+                <Package className="h-4 w-4" /> My Orders
+              </Link>
             )}
             {!adminLoading && isAdmin && (
               <Link

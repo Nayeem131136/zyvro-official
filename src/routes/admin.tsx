@@ -39,6 +39,7 @@ import {
   type OrderStatus,
 } from "@/lib/orders";
 import { fetchAppSettings, upsertAppSetting, formatPrice, type AppSettings } from "@/lib/settings";
+import { createSteadfastConsignment, refreshSteadfastStatus, STEADFAST_STATUS_LABEL } from "@/lib/steadfast";
 import { toast } from "sonner";
 import {
   Loader2, LogOut, Pencil, Plus, Trash2, X, ExternalLink, Upload, Copy, Palette,
@@ -68,11 +69,19 @@ function AdminPage() {
   useEffect(() => {
     let mounted = true;
     async function check() {
-      const { data } = await supabase.auth.getUser();
-      const email = data.user?.email ?? "";
-      if (!mounted) return;
-      setUserEmail(email);
-      setState(email.toLowerCase() === ADMIN_EMAIL ? "ok" : "unauth");
+      try {
+        const { data } = await supabase.auth.getUser();
+        const email = data.user?.email ?? "";
+        if (!mounted) return;
+        setUserEmail(email);
+        setState(email.toLowerCase() === ADMIN_EMAIL ? "ok" : "unauth");
+      } catch {
+        // Any auth error (missing session, network hiccup, etc.) means
+        // "not logged in" — never let this leave the page stuck loading.
+        if (!mounted) return;
+        setUserEmail("");
+        setState("unauth");
+      }
     }
     check();
     const { data: sub } = supabase.auth.onAuthStateChange(() => check());
@@ -84,12 +93,15 @@ function AdminPage() {
   }, [state, navigate]);
 
   async function signOut() {
-    // scope: "local" clears the session immediately (no network round-trip),
-    // so this resolves fast. We must await it BEFORE navigating, otherwise
-    // /admin/login's own auth-check can still see the old session and bounce
-    // straight back to /admin, causing a stuck/blank screen.
-    await supabase.auth.signOut({ scope: "local" });
-    navigate({ to: "/admin/login" });
+    // scope: "local" clears the session immediately (no network round-trip).
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } finally {
+      // Hard redirect instead of SPA navigation: this guarantees the app
+      // fully re-initializes and can never get stuck showing a stale/loading
+      // admin screen after logout, regardless of any router/auth-state race.
+      window.location.href = "/admin/login";
+    }
   }
 
   if (state !== "ok") {
@@ -1311,6 +1323,37 @@ function OrdersTab() {
     onError: () => toast.error("Failed to update order"),
   });
 
+  const sendToSteadfastMutation = useMutation({
+    mutationFn: (o: Order) =>
+      createSteadfastConsignment({
+        data: {
+          orderId: o.id,
+          invoice: o.order_no,
+          recipientName: o.customer_name,
+          recipientPhone: o.phone,
+          recipientAddress: `${o.address}, ${o.area}, ${o.district}`,
+          codAmount: Number(o.total_price),
+          note: o.note ?? "",
+          itemDescription: `${o.product_name}${o.color_name ? " · " + o.color_name : ""}${o.size_name ? " · " + o.size_name : ""} × ${o.quantity}`,
+        },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+      toast.success("Sent to Steadfast — tracking code generated");
+    },
+    onError: (err: any) => toast.error(err?.message ?? "Steadfast request failed"),
+  });
+
+  const refreshStatusMutation = useMutation({
+    mutationFn: (o: Order) =>
+      refreshSteadfastStatus({ data: { orderId: o.id, consignmentId: o.steadfast_consignment_id ?? "" } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+      toast.success("Delivery status updated");
+    },
+    onError: (err: any) => toast.error(err?.message ?? "Couldn't refresh status"),
+  });
+
   const filtered = filter === "all" ? orders : orders.filter((o) => o.status === filter);
   const filters: { id: "all" | OrderStatus; label: string }[] = [
     { id: "all", label: "All" },
@@ -1406,9 +1449,44 @@ function OrdersTab() {
                         <div className="text-muted-foreground">Created</div>
                         <div>{new Date(o.created_at).toLocaleString()}</div>
                       </div>
+                      <div className="space-y-1 sm:col-span-2">
+                        <div className="text-muted-foreground">Courier (Steadfast)</div>
+                        {o.steadfast_consignment_id ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[color:var(--gold-bright)]">
+                              Tracking: {o.steadfast_tracking_code || o.steadfast_consignment_id}
+                            </span>
+                            <span className="px-2 py-0.5 border border-white/15 text-[10px] tracked-wide">
+                              {STEADFAST_STATUS_LABEL[o.steadfast_status ?? ""] ?? o.steadfast_status ?? "Unknown"}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground/60 italic">Not sent yet</div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
+                      {o.status === "confirmed" && !o.steadfast_consignment_id && (
+                        <button
+                          onClick={() => sendToSteadfastMutation.mutate(o)}
+                          disabled={sendToSteadfastMutation.isPending}
+                          className="text-[11px] tracked-wide px-3 py-2 border border-sky-400/40 text-sky-300 hover:bg-sky-400/10 inline-flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {sendToSteadfastMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Package className="h-3.5 w-3.5" />}
+                          Send to Steadfast
+                        </button>
+                      )}
+                      {o.steadfast_consignment_id && (
+                        <button
+                          onClick={() => refreshStatusMutation.mutate(o)}
+                          disabled={refreshStatusMutation.isPending}
+                          className="text-[11px] tracked-wide px-3 py-2 border border-white/15 hover:border-white/30 inline-flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {refreshStatusMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                          Refresh Delivery Status
+                        </button>
+                      )}
                       {o.status === "pending" && (
                         <>
                           <button
@@ -1484,6 +1562,7 @@ function SettingsTab() {
       await Promise.all([
         upsertAppSetting("whatsapp_number", form.whatsapp_number),
         upsertAppSetting("delivery_charge_dhaka", form.delivery_charge_dhaka),
+        upsertAppSetting("delivery_charge_dhaka_sub", form.delivery_charge_dhaka_sub),
         upsertAppSetting("delivery_charge_outside_dhaka", form.delivery_charge_outside_dhaka),
         upsertAppSetting("brand_name", form.brand_name),
         upsertAppSetting("currency_symbol", form.currency_symbol),
@@ -1513,13 +1592,22 @@ function SettingsTab() {
             placeholder="8801XXXXXXXXX"
           />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="text-xs tracked-wide text-muted-foreground">DELIVERY CHARGE — DHAKA (৳)</label>
+            <label className="text-xs tracked-wide text-muted-foreground">DELIVERY CHARGE — DHAKA CITY (৳)</label>
             <input
               type="number"
               value={form.delivery_charge_dhaka}
               onChange={(e) => setForm({ ...form, delivery_charge_dhaka: Number(e.target.value) || 0 })}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="text-xs tracked-wide text-muted-foreground">DELIVERY CHARGE — DHAKA SUB-AREA (৳)</label>
+            <input
+              type="number"
+              value={form.delivery_charge_dhaka_sub}
+              onChange={(e) => setForm({ ...form, delivery_charge_dhaka_sub: Number(e.target.value) || 0 })}
               className={inputCls}
             />
           </div>
