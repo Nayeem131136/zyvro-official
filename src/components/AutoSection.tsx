@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
@@ -11,18 +12,37 @@ export function AutoSection({
   eyebrow,
   limit = 4,
   fallbackHide = true,
+  excludeIds,
+  onShown,
 }: {
   label: string;
   title: string;
   eyebrow?: string;
   limit?: number;
   fallbackHide?: boolean;
+  /** Product IDs already shown earlier on the page — filtered out here so
+   * the same product never repeats across multiple label sections. */
+  excludeIds?: Set<string>;
+  /** Reports the IDs this section ends up displaying, so later sections
+   * can exclude them too. */
+  onShown?: (ids: string[]) => void;
 }) {
+  // Fetch extra so we still have enough left after excluding already-shown items.
   const { data, isLoading } = useQuery({
     queryKey: ["products", "by-label", label, limit],
-    queryFn: () => fetchProductsByLabel(label, limit),
+    queryFn: () => fetchProductsByLabel(label, limit + (excludeIds?.size ?? 0)),
   });
-  const items = data ?? [];
+  const items = (data ?? []).filter((p) => !excludeIds?.has(p.id)).slice(0, limit);
+
+  const reportedRef = useRef(false);
+  useEffect(() => {
+    if (!isLoading && !reportedRef.current) {
+      reportedRef.current = true;
+      onShown?.(items.map((p) => p.id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading]);
+
   if (!isLoading && items.length === 0 && fallbackHide) return null;
 
   return (

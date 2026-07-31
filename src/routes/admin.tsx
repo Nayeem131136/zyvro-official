@@ -33,6 +33,7 @@ import {
   subscribeOrders,
   buildWhatsappMessage,
   whatsappUrl,
+  updateOrderDeliveryCharge,
   ORDER_STATUS_FLOW,
   ORDER_STATUS_LABEL,
   type Order,
@@ -1358,6 +1359,68 @@ function OrderStatusPill({ status }: { status: OrderStatus }) {
   );
 }
 
+function DeliveryChargeEditor({ order: o }: { order: Order }) {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(o.delivery_charge));
+
+  const mutation = useMutation({
+    mutationFn: (charge: number) => updateOrderDeliveryCharge(o.id, charge),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+      qc.invalidateQueries({ queryKey: ["my-orders"] });
+      toast.success("Delivery charge updated");
+      setEditing(false);
+    },
+    onError: () => toast.error("Couldn't update delivery charge"),
+  });
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <span>
+          {formatPrice(o.unit_price)} + {formatPrice(o.delivery_charge)} ={" "}
+          <span className="text-[color:var(--gold-bright)]">{formatPrice(o.total_price)}</span>
+        </span>
+        <button
+          type="button"
+          onClick={() => { setValue(String(o.delivery_charge)); setEditing(true); }}
+          className="text-[10px] tracked-wide underline text-muted-foreground hover:text-foreground"
+        >
+          Edit delivery charge
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="w-20 bg-transparent border border-white/15 px-2 py-1 text-xs"
+        autoFocus
+      />
+      <button
+        type="button"
+        disabled={mutation.isPending}
+        onClick={() => mutation.mutate(Number(value) || 0)}
+        className="text-[10px] tracked-wide px-2 py-1 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-400/10"
+      >
+        {mutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+      </button>
+      <button
+        type="button"
+        onClick={() => setEditing(false)}
+        className="text-[10px] tracked-wide px-2 py-1 border border-white/15 hover:border-white/30"
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 function OrdersTab() {
   const qc = useQueryClient();
   const { data: orders = [], isLoading } = useQuery({
@@ -1503,7 +1566,7 @@ function OrdersTab() {
                       )}
                       <div className="space-y-1">
                         <div className="text-muted-foreground">Unit / Delivery / Total</div>
-                        <div>{formatPrice(o.unit_price)} + {formatPrice(o.delivery_charge)} = <span className="text-[color:var(--gold-bright)]">{formatPrice(o.total_price)}</span></div>
+                        <DeliveryChargeEditor order={o} />
                       </div>
                       <div className="space-y-1">
                         <div className="text-muted-foreground">Created</div>

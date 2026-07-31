@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Award, Shirt, Gem, Globe2 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
@@ -30,6 +31,10 @@ function HomePage() {
   });
 
   const featured = (products ?? []).slice(0, 4);
+  const [shownIds, setShownIds] = useState<Set<string>>(new Set());
+  // Seed with the Featured Collection products as soon as we know them, so
+  // the label sections below never repeat a product already shown above.
+  const baseExcludeIds = new Set([...shownIds, ...featured.map((p) => p.id)]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -96,10 +101,26 @@ function HomePage() {
         </div>
       </section>
 
-      <AutoSection label="new_arrival" title="New Arrivals" eyebrow="JUST DROPPED" />
-      <AutoSection label="best_seller" title="Best Sellers" eyebrow="TOP OF THE DROP" />
-      <AutoSection label="limited_edition" title="Limited Edition" eyebrow="LIMITED RUN" />
-      <AutoSection label="sale" title="On Sale" eyebrow="LAST CALL" />
+      <AutoSection
+        label="new_arrival" title="New Arrivals" eyebrow="JUST DROPPED"
+        excludeIds={baseExcludeIds}
+        onShown={(ids) => setShownIds((prev) => new Set([...prev, ...ids]))}
+      />
+      <AutoSection
+        label="best_seller" title="Best Sellers" eyebrow="TOP OF THE DROP"
+        excludeIds={baseExcludeIds}
+        onShown={(ids) => setShownIds((prev) => new Set([...prev, ...ids]))}
+      />
+      <AutoSection
+        label="limited_edition" title="Limited Edition" eyebrow="LIMITED RUN"
+        excludeIds={baseExcludeIds}
+        onShown={(ids) => setShownIds((prev) => new Set([...prev, ...ids]))}
+      />
+      <AutoSection
+        label="sale" title="On Sale" eyebrow="LAST CALL"
+        excludeIds={baseExcludeIds}
+        onShown={(ids) => setShownIds((prev) => new Set([...prev, ...ids]))}
+      />
 
       <section className="py-20 md:py-28 border-t border-white/5 bg-[oklch(0.09_0_0)]">
         <div className="mx-auto max-w-7xl px-6 grid gap-12 md:grid-cols-2 md:items-center">

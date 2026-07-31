@@ -77,10 +77,20 @@ export type NewOrderInput = {
 };
 
 /** Customer-facing: create a Pending order. Public insert, no login required. */
+/** Normalize a Bangladeshi phone number to include the +880 country code. */
+export function normalizeBdPhone(raw: string): string {
+  let p = raw.trim().replace(/[\s-]/g, "");
+  if (p.startsWith("+880")) return p;
+  if (p.startsWith("880")) return `+${p}`;
+  if (p.startsWith("0")) return `+880${p.slice(1)}`;
+  if (/^1\d{9}$/.test(p)) return `+880${p}`; // e.g. 1XXXXXXXXX with no leading 0
+  return p; // already has some other country code or unrecognized format — leave as-is
+}
+
 export async function createOrder(input: NewOrderInput): Promise<Order> {
   const { data, error } = await supabase
     .from("orders")
-    .insert({ ...input, status: "pending" })
+    .insert({ ...input, phone: normalizeBdPhone(input.phone), status: "pending" })
     .select("*")
     .single();
   if (error) throw error;
@@ -109,6 +119,23 @@ export async function fetchMyOrders(): Promise<Order[]> {
 
 export async function updateOrderStatus(id: string, status: OrderStatus): Promise<void> {
   const { error } = await supabase.from("orders").update({ status }).eq("id", id);
+  if (error) throw error;
+}
+
+/** Admin-only: correct the delivery charge on an order (e.g. actual courier rate differed).
+ * Recalculates total_price so the customer's "My Orders" tracking always shows the right total. */
+export async function updateOrderDeliveryCharge(id: string, deliveryCharge: number): Promise<void> {
+  const { data: existing, error: fetchErr } = await supabase
+    .from("orders")
+    .select("unit_price, quantity")
+    .eq("id", id)
+    .single();
+  if (fetchErr) throw fetchErr;
+  const subtotal = Number(existing.unit_price) * Number(existing.quantity);
+  const { error } = await supabase
+    .from("orders")
+    .update({ delivery_charge: deliveryCharge, total_price: subtotal + deliveryCharge })
+    .eq("id", id);
   if (error) throw error;
 }
 
@@ -150,6 +177,8 @@ export function buildWhatsappMessage(order: Order): string {
     `Area: ${order.area}`,
     `Full Address: ${order.address}`,
     order.note ? `Order Note: ${order.note}` : null,
+    "",
+    `📌 Please pay only the delivery charge (৳${order.delivery_charge}) in advance via bKash/Nagad to confirm this order. Product price is Cash on Delivery.`,
     "",
     "Please confirm my order. Thank you.",
   ].filter((l): l is string => l !== null);

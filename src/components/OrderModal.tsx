@@ -246,6 +246,10 @@ export function OrderModal({ open, onClose, product }: OrderModalProps) {
               {form.note && <div className="italic">Note: {form.note}</div>}
             </div>
 
+            <div className="border border-[color:var(--gold)]/30 bg-[color:var(--gold)]/5 p-3 text-xs text-[color:var(--gold-bright)]">
+              📌 To confirm this order, please pay only the delivery charge ({formatPrice(deliveryCharge)}) in advance via bKash/Nagad — the product price is Cash on Delivery. Our team will share payment details on WhatsApp.
+            </div>
+
             <button
               onClick={confirmOrder}
               disabled={submitting}

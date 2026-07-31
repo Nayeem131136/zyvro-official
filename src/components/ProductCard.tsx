@@ -30,7 +30,7 @@ export function ProductCard({
             decoding="async"
             width={480}
             height={600}
-            className={`zy-card-image absolute inset-0 h-full w-full object-cover transition-transform duration-700 ${
+            className={`zy-card-image absolute inset-0 h-full w-full object-contain transition-transform duration-700 ${
               oos ? "grayscale-[0.4] opacity-80" : "group-hover:scale-105"
             }`}
           />

@@ -1,4 +1,5 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
+import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { MessageCircle, ArrowLeft, Share2, Bell, ChevronLeft, ChevronRight } from "lucide-react";
@@ -127,6 +128,37 @@ function ProductPage() {
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
+  const navigate = useNavigate();
+  const [isSignedIn, setIsSignedIn] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (mounted) setIsSignedIn(!!data.user);
+    }).catch(() => {
+      if (mounted) setIsSignedIn(false);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setIsSignedIn(!!session?.user);
+    });
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  function handleOrderClick() {
+    if (!canOrder) {
+      toast.error("Please select a size first");
+      return;
+    }
+    if (!isSignedIn) {
+      toast.error("Please create an account or sign in to place an order.");
+      navigate({ to: "/auth", search: { mode: "signup" } });
+      return;
+    }
+    setOrderOpen(true);
+  }
 
   useEffect(() => {
     setActiveImageIdx(0);
@@ -370,13 +402,7 @@ function ProductPage() {
                   </button>
                 ) : (
                   <button
-                    onClick={() => {
-                      if (!canOrder) {
-                        toast.error("Please select a size first");
-                        return;
-                      }
-                      setOrderOpen(true);
-                    }}
+                    onClick={handleOrderClick}
                     className={`btn-zy flex-1 !py-4 ${!canOrder ? "opacity-60" : ""}`}
                   >
                     <MessageCircle className="h-5 w-5" />
@@ -435,13 +461,7 @@ function ProductPage() {
           </button>
         ) : (
           <button
-            onClick={() => {
-              if (!canOrder) {
-                toast.error("Please select a size first");
-                return;
-              }
-              setOrderOpen(true);
-            }}
+            onClick={handleOrderClick}
             className={`btn-zy !py-3 !text-xs shrink-0 ${!canOrder ? "opacity-60" : ""}`}
           >
             <MessageCircle className="h-4 w-4" /> Order
