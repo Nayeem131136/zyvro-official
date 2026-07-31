@@ -209,7 +209,7 @@ function ProductPage() {
                     alt={`${product.name} — image ${activeImageIdx + 1}`}
                     width={800}
                     height={1000}
-                    className="h-full w-full object-cover transition-opacity duration-300"
+                    className="h-full w-full object-contain transition-opacity duration-300"
                     fetchPriority="high"
                   />
                 ) : (
@@ -256,7 +256,7 @@ function ProductPage() {
                         i === activeImageIdx ? "border-[color:var(--gold)]" : "border-white/10 hover:border-white/30"
                       }`}
                     >
-                      <img src={url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                      <img src={url} alt="" loading="lazy" decoding="async" className="h-full w-full object-contain" />
                     </button>
                   ))}
                 </div>
@@ -391,18 +391,18 @@ function ProductPage() {
               {product.free_shipping && (
                 <p className="text-xs text-emerald-400 tracked-wide">✓ FREE SHIPPING</p>
               )}
-
-              {product.description && (
-                <div className="pt-6 border-t border-white/5">
-                  <h3 className="text-xs tracked-wide text-muted-foreground mb-3">DESCRIPTION</h3>
-                  <div
-                    className="prose prose-invert prose-sm max-w-none text-muted-foreground leading-relaxed whitespace-pre-wrap"
-                    dangerouslySetInnerHTML={{ __html: product.description }}
-                  />
-                </div>
-              )}
             </div>
           </div>
+
+          {product.description && (
+            <div className="mt-14 md:mt-16 pt-8 border-t border-white/10">
+              <h3 className="text-xs tracked-wide text-[color:var(--gold-bright)] mb-4">DESCRIPTION</h3>
+              <div
+                className="prose prose-invert prose-sm sm:prose-base max-w-none text-muted-foreground leading-relaxed whitespace-pre-wrap"
+                dangerouslySetInnerHTML={{ __html: product.description }}
+              />
+            </div>
+          )}
 
           {related.length > 0 && (
             <div className="mt-20 md:mt-24">
