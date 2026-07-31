@@ -45,7 +45,7 @@ import { toast } from "sonner";
 import {
   Loader2, LogOut, Pencil, Plus, Trash2, X, ExternalLink, Upload, Copy, Palette,
   Ruler, Tag, FolderOpen, Package, ChevronDown, ChevronUp, Image as ImageIcon,
-  LayoutDashboard, ClipboardList, Settings, MessageCircle, Check, Ban,
+  LayoutDashboard, ClipboardList, Settings, MessageCircle, Check, Ban, Star,
 } from "lucide-react";
 import logoAsset from "@/assets/zyvro-logo.png";
 
