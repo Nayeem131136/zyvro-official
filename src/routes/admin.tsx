@@ -39,6 +39,7 @@ import {
   type OrderStatus,
 } from "@/lib/orders";
 import { fetchAppSettings, upsertAppSetting, formatPrice, type AppSettings } from "@/lib/settings";
+import { fetchProductDefaults, saveProductDefaults, type ProductDefaults } from "@/lib/settings";
 import { createSteadfastConsignment, refreshSteadfastStatus, STEADFAST_STATUS_LABEL } from "@/lib/steadfast";
 import { toast } from "sonner";
 import {
@@ -388,10 +389,17 @@ function ProductEditor({ productId, onClose }: { productId: string | null; onClo
     queryFn: () => (productId ? fetchProductByIdFull(productId) : null),
     enabled: !!productId,
   });
+  const { data: productDefaults, isLoading: defaultsLoading } = useQuery({
+    queryKey: ["product-defaults"],
+    queryFn: fetchProductDefaults,
+    enabled: isNew,
+  });
   const { data: categories = [] } = useQuery({ queryKey: ["categories"], queryFn: fetchCategories });
   const { data: collections = [] } = useQuery({ queryKey: ["collections"], queryFn: fetchCollections });
   const { data: colors = [] } = useQuery({ queryKey: ["colors"], queryFn: fetchColors });
   const { data: sizes = [] } = useQuery({ queryKey: ["sizes"], queryFn: fetchSizes });
+
+  const stillLoading = (!isNew && isLoading) || (isNew && defaultsLoading);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm overflow-y-auto">
@@ -401,11 +409,12 @@ function ProductEditor({ productId, onClose }: { productId: string | null; onClo
             <h2 className="font-display text-lg tracked-wide">{isNew ? "New Product" : "Edit Product"}</h2>
             <button type="button" onClick={onClose} className="h-8 w-8 grid place-items-center hover:bg-white/5"><X className="h-4 w-4" /></button>
           </div>
-          {!isNew && isLoading ? (
+          {stillLoading ? (
             <div className="p-16 grid place-items-center"><Loader2 className="h-6 w-6 animate-spin text-[color:var(--gold-bright)]" /></div>
           ) : (
             <EditorForm
               initial={initial ?? null}
+              defaults={isNew ? productDefaults : null}
               categories={categories}
               collections={collections}
               colors={colors}
@@ -460,28 +469,29 @@ type EditorVariant = {
   _open: boolean;
 };
 
-function initFromProduct(p: ProductWithVariants | null): EditorState {
+function initFromProduct(p: ProductWithVariants | null, defaults?: ProductDefaults | null): EditorState {
+  const d = !p && defaults ? defaults : null;
   return {
     name: p?.name ?? "",
     slug: p?.slug ?? "",
-    short_description: p?.short_description ?? "",
-    description: p?.description ?? "",
+    short_description: p?.short_description ?? d?.short_description ?? "",
+    description: p?.description ?? d?.description ?? "",
     category_id: p?.category_id ?? "",
-    collection_id: p?.collection_id ?? "",
-    tags: (p?.tags ?? []).join(", "),
+    collection_id: p?.collection_id ?? d?.collection_id ?? "",
+    tags: p ? (p.tags ?? []).join(", ") : (d?.tags ?? ""),
     thumbnail_url: p?.thumbnail_url ?? "",
     video_url: p?.video_url ?? "",
-    status: p?.status ?? "draft",
+    status: p?.status ?? d?.status ?? "draft",
     labels: p?.labels ?? [],
-    regular_price: p ? String(p.regular_price) : "",
-    sale_price: p?.sale_price != null ? String(p.sale_price) : "",
-    cost_price: p?.cost_price != null ? String(p.cost_price) : "",
-    weight: p?.weight != null ? String(p.weight) : "",
-    shipping_charge: p?.shipping_charge != null ? String(p.shipping_charge) : "",
-    free_shipping: p?.free_shipping ?? false,
-    low_stock_threshold: p ? String(p.low_stock_threshold) : "5",
-    seo_title: p?.seo_title ?? "",
-    seo_description: p?.seo_description ?? "",
+    regular_price: p ? String(p.regular_price) : (d?.regular_price ?? ""),
+    sale_price: p?.sale_price != null ? String(p.sale_price) : (d?.sale_price ?? ""),
+    cost_price: p?.cost_price != null ? String(p.cost_price) : (d?.cost_price ?? ""),
+    weight: p?.weight != null ? String(p.weight) : (d?.weight ?? ""),
+    shipping_charge: p?.shipping_charge != null ? String(p.shipping_charge) : (d?.shipping_charge ?? ""),
+    free_shipping: p?.free_shipping ?? d?.free_shipping ?? false,
+    low_stock_threshold: p ? String(p.low_stock_threshold) : (d?.low_stock_threshold ?? "5"),
+    seo_title: p?.seo_title ?? d?.seo_title ?? "",
+    seo_description: p?.seo_description ?? d?.seo_description ?? "",
     images: (p?.images ?? []).map((i) => ({ id: i.id, url: i.url, sort_order: i.sort_order })),
     variants: (p?.variants ?? []).map((v, idx) => variantToEditor(v, idx === 0)),
   };
@@ -505,15 +515,44 @@ function variantToEditor(v: ProductVariant, open = false): EditorVariant {
 }
 
 function EditorForm({
-  initial, categories, collections, colors, sizes, onSaved, onClose,
+  initial, defaults, categories, collections, colors, sizes, onSaved, onClose,
 }: {
   initial: ProductWithVariants | null;
+  defaults?: ProductDefaults | null;
   categories: Category[]; collections: Collection[]; colors: Color[]; sizes: Size[];
   onSaved: (id: string) => void; onClose: () => void;
 }) {
-  const [s, setS] = useState<EditorState>(() => initFromProduct(initial));
+  const [s, setS] = useState<EditorState>(() => initFromProduct(initial, defaults));
   const [saving, setSaving] = useState(false);
+  const [savingDefaults, setSavingDefaults] = useState(false);
   const [slugDirty, setSlugDirty] = useState(!!initial);
+
+  async function handleSaveAsDefault() {
+    setSavingDefaults(true);
+    try {
+      await saveProductDefaults({
+        short_description: s.short_description,
+        description: s.description,
+        collection_id: s.collection_id,
+        tags: s.tags,
+        status: s.status,
+        regular_price: s.regular_price,
+        sale_price: s.sale_price,
+        cost_price: s.cost_price,
+        weight: s.weight,
+        shipping_charge: s.shipping_charge,
+        free_shipping: s.free_shipping,
+        low_stock_threshold: s.low_stock_threshold,
+        seo_title: s.seo_title,
+        seo_description: s.seo_description,
+      });
+      toast.success("Saved as default — future new products will start pre-filled with these values");
+    } catch {
+      toast.error("Couldn't save defaults");
+    } finally {
+      setSavingDefaults(false);
+    }
+  }
 
   function update<K extends keyof EditorState>(key: K, value: EditorState[K]) {
     setS((prev) => ({ ...prev, [key]: value }));
@@ -947,6 +986,16 @@ function EditorForm({
       </Section>
 
       <div className="sticky bottom-0 flex justify-end gap-2 px-6 py-4 -mx-6 border-t border-white/10 bg-card">
+        <button
+          type="button"
+          onClick={handleSaveAsDefault}
+          disabled={savingDefaults}
+          title="Save the current description, price, tags, collection, SEO etc. as the template for future New Products"
+          className="btn-zy-outline !py-2 !text-xs mr-auto inline-flex items-center gap-1.5"
+        >
+          {savingDefaults ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Star className="h-3.5 w-3.5" />}
+          Save as Default
+        </button>
         <button type="button" onClick={onClose} className="btn-zy-outline !py-2 !text-xs">Cancel</button>
         <button type="submit" disabled={saving} className="btn-zy !py-2 !text-xs">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Product"}
@@ -1190,10 +1239,21 @@ function UploadBtn({ label, onFiles, multiple }: { label: string; onFiles: (f: F
         multiple={multiple}
         onChange={async (e) => {
           const files = e.target.files;
-          e.target.value = "";
-          if (!files) return;
+          if (!files || files.length === 0) return;
+          // IMPORTANT: snapshot into a real array BEFORE touching e.target.value.
+          // Resetting input.value while `files` still references the live
+          // FileList can empty it out in some browsers, silently turning this
+          // into an upload of zero files (no error, no network call, nothing).
+          const snapshot = Array.from(files) as unknown as FileList;
           setBusy(true);
-          try { await onFiles(files); } finally { setBusy(false); }
+          try {
+            await onFiles(snapshot);
+          } catch (err) {
+            console.error("[upload] onFiles failed:", err);
+          } finally {
+            setBusy(false);
+            e.target.value = "";
+          }
         }}
         className="hidden"
         disabled={busy}
