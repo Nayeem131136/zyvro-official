@@ -1,48 +1,32 @@
-import { useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { ProductCard, ProductCardSkeleton } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
-import { fetchProductsByLabel } from "@/lib/products";
+import type { ProductCardRow } from "@/lib/products";
 
+/**
+ * Purely presentational — the parent (Home page) decides exactly which
+ * products go in this section (already deduplicated against every other
+ * section) and passes them in directly. This avoids the race condition
+ * that happens when every section independently fetches + self-excludes:
+ * with only a couple of products sharing several labels, parallel fetches
+ * could each "claim" the same product before hearing about each other.
+ */
 export function AutoSection({
-  label,
   title,
   eyebrow,
+  items,
+  isLoading,
   limit = 4,
   fallbackHide = true,
-  excludeIds,
-  onShown,
 }: {
-  label: string;
   title: string;
   eyebrow?: string;
+  items: ProductCardRow[];
+  isLoading: boolean;
   limit?: number;
   fallbackHide?: boolean;
-  /** Product IDs already shown earlier on the page — filtered out here so
-   * the same product never repeats across multiple label sections. */
-  excludeIds?: Set<string>;
-  /** Reports the IDs this section ends up displaying, so later sections
-   * can exclude them too. */
-  onShown?: (ids: string[]) => void;
 }) {
-  // Fetch extra so we still have enough left after excluding already-shown items.
-  const { data, isLoading } = useQuery({
-    queryKey: ["products", "by-label", label, limit],
-    queryFn: () => fetchProductsByLabel(label, limit + (excludeIds?.size ?? 0)),
-  });
-  const items = (data ?? []).filter((p) => !excludeIds?.has(p.id)).slice(0, limit);
-
-  const reportedRef = useRef(false);
-  useEffect(() => {
-    if (!isLoading && !reportedRef.current) {
-      reportedRef.current = true;
-      onShown?.(items.map((p) => p.id));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading]);
-
   if (!isLoading && items.length === 0 && fallbackHide) return null;
 
   return (

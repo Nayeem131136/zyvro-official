@@ -1,5 +1,4 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Award, Shirt, Gem, Globe2 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
@@ -7,7 +6,6 @@ import { Footer } from "@/components/Footer";
 import { Marquee } from "@/components/Marquee";
 import { Reveal } from "@/components/Reveal";
 import { ProductCard, ProductCardSkeleton } from "@/components/ProductCard";
-import { AutoSection } from "@/components/AutoSection";
 import { fetchPublishedProducts } from "@/lib/products";
 
 import heroBannerAsset from "@/assets/zyvro-hero-banner.png";
@@ -30,11 +28,9 @@ function HomePage() {
     queryFn: fetchPublishedProducts,
   });
 
-  const featured = (products ?? []).slice(0, 4);
-  const [shownIds, setShownIds] = useState<Set<string>>(new Set());
-  // Seed with the Featured Collection products as soon as we know them, so
-  // the label sections below never repeat a product already shown above.
-  const baseExcludeIds = new Set([...shownIds, ...featured.map((p) => p.id)]);
+  // One unified grid — no separate label-based sections. Badges (SALE/NEW/etc)
+  // still show on each card and on the product page itself.
+  const featured = (products ?? []).slice(0, 8);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -81,7 +77,7 @@ function HomePage() {
 
           {isLoading ? (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, i) => <ProductCardSkeleton key={i} />)}
+              {Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} />)}
             </div>
           ) : featured.length === 0 ? (
             <div className="border border-dashed border-white/10 py-24 text-center">
@@ -100,27 +96,6 @@ function HomePage() {
           )}
         </div>
       </section>
-
-      <AutoSection
-        label="new_arrival" title="New Arrivals" eyebrow="JUST DROPPED"
-        excludeIds={baseExcludeIds}
-        onShown={(ids) => setShownIds((prev) => new Set([...prev, ...ids]))}
-      />
-      <AutoSection
-        label="best_seller" title="Best Sellers" eyebrow="TOP OF THE DROP"
-        excludeIds={baseExcludeIds}
-        onShown={(ids) => setShownIds((prev) => new Set([...prev, ...ids]))}
-      />
-      <AutoSection
-        label="limited_edition" title="Limited Edition" eyebrow="LIMITED RUN"
-        excludeIds={baseExcludeIds}
-        onShown={(ids) => setShownIds((prev) => new Set([...prev, ...ids]))}
-      />
-      <AutoSection
-        label="sale" title="On Sale" eyebrow="LAST CALL"
-        excludeIds={baseExcludeIds}
-        onShown={(ids) => setShownIds((prev) => new Set([...prev, ...ids]))}
-      />
 
       <section className="py-20 md:py-28 border-t border-white/5 bg-[oklch(0.09_0_0)]">
         <div className="mx-auto max-w-7xl px-6 grid gap-12 md:grid-cols-2 md:items-center">
