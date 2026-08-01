@@ -157,30 +157,42 @@ export function subscribeOrders(onChange: () => void): () => void {
 
 /** Builds the pre-filled WhatsApp message text for a confirmed/created order. */
 export function buildWhatsappMessage(order: Order): string {
+  // Our note field is stored as "Delivery Zone: X — actual customer note",
+  // so split those back apart here for a cleaner, separate display.
+  let zoneLine: string | null = null;
+  let noteLine: string | null = order.note ?? null;
+  if (noteLine?.startsWith("Delivery Zone:")) {
+    const parts = noteLine.split(" — ");
+    zoneLine = parts[0].replace("Delivery Zone:", "").trim();
+    noteLine = parts.slice(1).join(" — ").trim() || null;
+  }
+
   const lines = [
-    "🛒 *NEW ORDER REQUEST — ZYVRO*",
+    "🛍️ *ZYVRO — NEW ORDER*",
+    "━━━━━━━━━━━━━━━",
+    `Order ID: *${order.order_no}*`,
     "",
-    `Order ID: ${order.order_no}`,
-    `Product: ${order.product_name}`,
-    order.product_url ? `Product Link: ${order.product_url}` : null,
-    order.color_name ? `Color: ${order.color_name}` : null,
-    order.size_name ? `Size: ${order.size_name}` : null,
-    `Quantity: ${order.quantity}`,
+    "📦 *Product*",
+    order.product_name,
+    [order.color_name, order.size_name, `Qty: ${order.quantity}`].filter(Boolean).join("   |   "),
+    order.product_url ? `Link: ${order.product_url}` : null,
     "",
+    "💰 *Payment*",
     `Unit Price: ৳${order.unit_price}`,
     `Delivery Charge: ৳${order.delivery_charge}`,
-    `Total: ৳${order.total_price}`,
+    `*Total: ৳${order.total_price}*`,
     "",
-    `Customer Name: ${order.customer_name}`,
-    `Phone: ${order.phone}`,
-    `District: ${order.district}`,
-    `Area: ${order.area}`,
-    `Full Address: ${order.address}`,
-    order.note ? `Order Note: ${order.note}` : null,
+    "📍 *Delivery Details*",
+    order.customer_name,
+    order.phone,
+    zoneLine ? `${order.area}, ${zoneLine}` : `${order.area}, ${order.district}`,
+    order.address,
+    noteLine ? `📝 Note: ${noteLine}` : null,
     "",
-    `📌 Please pay only the delivery charge (৳${order.delivery_charge}) in advance via bKash/Nagad to confirm this order. Product price is Cash on Delivery.`,
+    "━━━━━━━━━━━━━━━",
+    `✅ *To confirm:* please pay only the delivery charge (৳${order.delivery_charge}) in advance via bKash/Nagad — the product price is Cash on Delivery.`,
     "",
-    "Please confirm my order. Thank you.",
+    "🙏 Please confirm my order. Thank you — ZYVRO 🖤",
   ].filter((l): l is string => l !== null);
   return lines.join("\n");
 }
