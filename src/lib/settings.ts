@@ -60,7 +60,15 @@ export function isNewArrival(createdAt: string | Date, days = DEFAULT_SETTINGS.n
  * Applies only to NEW products; editing an existing product always shows
  * its own saved values, never the template.
  */
+export type ProductDefaultVariant = {
+  color_id: string;
+  sku: string;
+  price_override: string;
+  sizes: { size_id: string; stock: string; sku: string; price_override: string }[];
+};
+
 export type ProductDefaults = {
+  name: string;
   short_description: string;
   description: string;
   collection_id: string;
@@ -75,9 +83,11 @@ export type ProductDefaults = {
   low_stock_threshold: string;
   seo_title: string;
   seo_description: string;
+  variants: ProductDefaultVariant[];
 };
 
 export const BLANK_PRODUCT_DEFAULTS: ProductDefaults = {
+  name: "",
   short_description: "",
   description: "",
   collection_id: "",
@@ -92,6 +102,7 @@ export const BLANK_PRODUCT_DEFAULTS: ProductDefaults = {
   low_stock_threshold: "5",
   seo_title: "",
   seo_description: "",
+  variants: [],
 };
 
 const PRODUCT_DEFAULTS_KEY = "product_defaults";

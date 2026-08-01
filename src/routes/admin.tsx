@@ -40,7 +40,7 @@ import {
   type OrderStatus,
 } from "@/lib/orders";
 import { fetchAppSettings, upsertAppSetting, formatPrice, type AppSettings } from "@/lib/settings";
-import { fetchProductDefaults, saveProductDefaults, type ProductDefaults } from "@/lib/settings";
+import { fetchProductDefaults, saveProductDefaults, type ProductDefaults, type ProductDefaultVariant } from "@/lib/settings";
 import { createSteadfastConsignment, refreshSteadfastStatus, STEADFAST_STATUS_LABEL } from "@/lib/steadfast";
 import { toast } from "sonner";
 import {
@@ -395,12 +395,21 @@ function ProductEditor({ productId, onClose }: { productId: string | null; onClo
     queryFn: fetchProductDefaults,
     enabled: isNew,
   });
+  const { data: productCount } = useQuery({
+    queryKey: ["product-count"],
+    queryFn: async () => {
+      const { count, error } = await supabase.from("products").select("id", { count: "exact", head: true });
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: isNew,
+  });
   const { data: categories = [] } = useQuery({ queryKey: ["categories"], queryFn: fetchCategories });
   const { data: collections = [] } = useQuery({ queryKey: ["collections"], queryFn: fetchCollections });
   const { data: colors = [] } = useQuery({ queryKey: ["colors"], queryFn: fetchColors });
   const { data: sizes = [] } = useQuery({ queryKey: ["sizes"], queryFn: fetchSizes });
 
-  const stillLoading = (!isNew && isLoading) || (isNew && defaultsLoading);
+  const stillLoading = (!isNew && isLoading) || (isNew && (defaultsLoading || productCount === undefined));
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm overflow-y-auto">
@@ -416,6 +425,7 @@ function ProductEditor({ productId, onClose }: { productId: string | null; onClo
             <EditorForm
               initial={initial ?? null}
               defaults={isNew ? productDefaults : null}
+              autoSlugSuffix={isNew ? (productCount ?? 0) + 1 : undefined}
               categories={categories}
               collections={collections}
               colors={colors}
@@ -470,11 +480,16 @@ type EditorVariant = {
   _open: boolean;
 };
 
-function initFromProduct(p: ProductWithVariants | null, defaults?: ProductDefaults | null): EditorState {
+function initFromProduct(
+  p: ProductWithVariants | null,
+  defaults?: ProductDefaults | null,
+  autoSlugSuffix?: number,
+): EditorState {
   const d = !p && defaults ? defaults : null;
+  const baseName = p?.name ?? d?.name ?? "";
   return {
-    name: p?.name ?? "",
-    slug: p?.slug ?? "",
+    name: baseName,
+    slug: p ? (p.slug ?? "") : (baseName && autoSlugSuffix ? `${slugify(baseName)}-${autoSlugSuffix}` : ""),
     short_description: p?.short_description ?? d?.short_description ?? "",
     description: p?.description ?? d?.description ?? "",
     category_id: p?.category_id ?? "",
@@ -494,7 +509,24 @@ function initFromProduct(p: ProductWithVariants | null, defaults?: ProductDefaul
     seo_title: p?.seo_title ?? d?.seo_title ?? "",
     seo_description: p?.seo_description ?? d?.seo_description ?? "",
     images: (p?.images ?? []).map((i) => ({ id: i.id, url: i.url, sort_order: i.sort_order })),
-    variants: (p?.variants ?? []).map((v, idx) => variantToEditor(v, idx === 0)),
+    variants: p
+      ? p.variants.map((v, idx) => variantToEditor(v, idx === 0))
+      : (d?.variants ?? []).map((v, idx) => defaultVariantToEditor(v, idx === 0)),
+  };
+}
+
+/** Build an empty (no images yet) editor variant from a saved default template. */
+function defaultVariantToEditor(v: ProductDefaultVariant, open = false): EditorVariant {
+  return {
+    color_id: v.color_id,
+    sku: v.sku,
+    price_override: v.price_override,
+    sort_order: 0,
+    images: [],
+    sizes: v.sizes.map((sz, idx) => ({
+      size_id: sz.size_id, stock: sz.stock, sku: sz.sku, price_override: sz.price_override, sort_order: idx,
+    })),
+    _open: open,
   };
 }
 
@@ -516,22 +548,24 @@ function variantToEditor(v: ProductVariant, open = false): EditorVariant {
 }
 
 function EditorForm({
-  initial, defaults, categories, collections, colors, sizes, onSaved, onClose,
+  initial, defaults, autoSlugSuffix, categories, collections, colors, sizes, onSaved, onClose,
 }: {
   initial: ProductWithVariants | null;
   defaults?: ProductDefaults | null;
+  autoSlugSuffix?: number;
   categories: Category[]; collections: Collection[]; colors: Color[]; sizes: Size[];
   onSaved: (id: string) => void; onClose: () => void;
 }) {
-  const [s, setS] = useState<EditorState>(() => initFromProduct(initial, defaults));
+  const [s, setS] = useState<EditorState>(() => initFromProduct(initial, defaults, autoSlugSuffix));
   const [saving, setSaving] = useState(false);
   const [savingDefaults, setSavingDefaults] = useState(false);
-  const [slugDirty, setSlugDirty] = useState(!!initial);
+  const [slugDirty, setSlugDirty] = useState(!!initial || !!defaults?.name);
 
   async function handleSaveAsDefault() {
     setSavingDefaults(true);
     try {
       await saveProductDefaults({
+        name: s.name,
         short_description: s.short_description,
         description: s.description,
         collection_id: s.collection_id,
@@ -546,8 +580,16 @@ function EditorForm({
         low_stock_threshold: s.low_stock_threshold,
         seo_title: s.seo_title,
         seo_description: s.seo_description,
+        variants: s.variants.map((v) => ({
+          color_id: v.color_id,
+          sku: v.sku,
+          price_override: v.price_override,
+          sizes: v.sizes.map((sz) => ({
+            size_id: sz.size_id, stock: sz.stock, sku: sz.sku, price_override: sz.price_override,
+          })),
+        })),
       });
-      toast.success("Saved as default — future new products will start pre-filled with these values");
+      toast.success("Saved as default — new products will start pre-filled with this name, price, and color/size setup. Just upload images per color.");
     } catch {
       toast.error("Couldn't save defaults");
     } finally {
