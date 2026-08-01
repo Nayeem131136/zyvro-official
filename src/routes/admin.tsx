@@ -669,9 +669,31 @@ function EditorForm({
           supabase.from("product_variants").delete().eq("product_id", productId),
         ]);
       } else {
-        const { data, error } = await supabase.from("products").insert(payload).select("id").single();
-        if (error) throw error;
-        productId = data.id;
+        // Auto-uniquify the slug on conflict (e.g. adding several similar
+        // color-variant products) instead of failing the whole save.
+        let attemptSlug = slug;
+        let lastError: any = null;
+        productId = "";
+        for (let attempt = 1; attempt <= 8; attempt++) {
+          const { data, error } = await supabase
+            .from("products")
+            .insert({ ...payload, slug: attemptSlug })
+            .select("id")
+            .single();
+          if (!error) {
+            productId = data.id;
+            lastError = null;
+            break;
+          }
+          lastError = error;
+          const isSlugConflict = error.code === "23505" && /slug/i.test(error.message ?? "");
+          if (!isSlugConflict) break; // some other error — stop retrying, surface it
+          attemptSlug = `${slug}-${attempt + 1}`;
+        }
+        if (lastError) throw lastError;
+        if (attemptSlug !== slug) {
+          toast.info(`URL Slug "${slug}" was taken — used "${attemptSlug}" instead. You can rename it in Edit Product.`);
+        }
       }
 
       if (s.images.length) {
@@ -716,8 +738,17 @@ function EditorForm({
       toast.success(initial ? "Product updated" : "Product created");
       onSaved(productId);
       onClose();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Save failed");
+    } catch (err: any) {
+      const message: string = err?.message ?? String(err);
+      if (err?.code === "23505" || /duplicate key|already exists/i.test(message)) {
+        if (/slug/i.test(message)) {
+          toast.error("This URL Slug is already used by another product. Please change the URL Slug field to something unique.");
+        } else {
+          toast.error("That value is already in use elsewhere — please check for duplicates.");
+        }
+      } else {
+        toast.error(message || "Save failed");
+      }
     } finally {
       setSaving(false);
     }
