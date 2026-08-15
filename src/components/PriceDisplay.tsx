@@ -1,4 +1,3 @@
-import { discountPercent } from "@/lib/products";
 import { formatPrice } from "@/lib/settings";
 
 export function PriceDisplay({
@@ -16,8 +15,8 @@ export function PriceDisplay({
   const cls =
     size === "sm" ? "text-base" : size === "lg" ? "text-3xl md:text-4xl" : "text-lg";
   const strike = size === "sm" ? "text-xs" : size === "lg" ? "text-lg" : "text-xs";
-  const disc = showStrike && showDiscountPct
-    ? discountPercent({ regular_price: regular ?? 0, sale_price: price })
+  const disc = showStrike && showDiscountPct && regular
+    ? Math.round(((regular - price) / regular) * 100)
     : null;
   return (
     <div className="flex items-baseline gap-2 flex-wrap">

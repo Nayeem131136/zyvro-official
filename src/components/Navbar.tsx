@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Menu, X, ShieldCheck, LogOut, Package } from "lucide-react";
+import { Menu, X, ShieldCheck, LogOut, Package, Gift } from "lucide-react";
 import logoCleanUrl from "@/assets/zyvro-logo-clean.png";
 import { useAdminSession } from "@/lib/admin";
 import { supabase } from "@/integrations/supabase/client";
+import { SpinWheelModal } from "@/components/SpinWheelModal";
+import { useActiveSpinOffer } from "@/lib/spin";
 
 const links = [
   { to: "/shop", label: "Shop" },
@@ -16,6 +18,8 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
   const { isAdmin, loading: adminLoading, email } = useAdminSession();
   const isSignedIn = !!email;
+  const [spinOpen, setSpinOpen] = useState(false);
+  const { offer } = useActiveSpinOffer();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -33,6 +37,7 @@ export function Navbar() {
 
 
   return (
+    <>
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${
         scrolled
@@ -59,6 +64,15 @@ export function Navbar() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSpinOpen(true)}
+            className="relative inline-flex items-center gap-1.5 h-10 px-3 sm:px-4 rounded-full bg-gradient-to-r from-[color:var(--gold-deep)] to-[color:var(--gold-bright)] text-black text-[10px] sm:text-[11px] font-display tracked-wide hover:brightness-110 transition shadow-[0_0_20px_-6px_rgba(232,200,120,0.7)]"
+          >
+            <Gift className="h-3.5 w-3.5" />
+            <span className="hidden xs:inline">{offer ? `${offer.percent}% OFF UNLOCKED` : "SPIN & WIN"}</span>
+            {!offer && <span className="xs:hidden">WIN</span>}
+          </button>
           {!adminLoading && !isSignedIn && (
             <div className="hidden sm:flex items-center gap-2">
               <Link
@@ -179,5 +193,7 @@ export function Navbar() {
         </div>
       )}
     </header>
+    <SpinWheelModal open={spinOpen} onClose={() => setSpinOpen(false)} />
+    </>
   );
 }

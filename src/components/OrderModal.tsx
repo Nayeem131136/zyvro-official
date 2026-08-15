@@ -17,6 +17,7 @@ type OrderModalProps = {
     colorName?: string | null;
     sizeName?: string | null;
     unitPrice: number;
+    spinPercent?: number | null;
   };
 };
 
@@ -73,7 +74,11 @@ export function OrderModal({ open, onClose, product }: OrderModalProps) {
         district: form.district.trim(),
         area: form.area.trim(),
         address: form.address.trim(),
-        note: [`Delivery Zone: ${zoneLabel}`, form.note.trim()].filter(Boolean).join(" — "),
+        note: [
+          `Delivery Zone: ${zoneLabel}`,
+          product.spinPercent ? `Spin Discount: -${product.spinPercent}%` : null,
+          form.note.trim(),
+        ].filter(Boolean).join(" — "),
         product_id: product.id,
         product_name: product.name,
         product_url: product.url,
@@ -232,6 +237,9 @@ export function OrderModal({ open, onClose, product }: OrderModalProps) {
               <SummaryRow label="Quantity" value={String(form.quantity)} />
               <SummaryRow label="Delivery Zone" value={zoneLabel} />
               <div className="h-px bg-white/10 my-2" />
+              {product.spinPercent != null && (
+                <div className="text-[11px] text-[color:var(--gold-bright)]">🎉 Spin Discount −{product.spinPercent}% applied</div>
+              )}
               <SummaryRow label="Unit Price" value={formatPrice(product.unitPrice)} />
               <SummaryRow label="Subtotal" value={formatPrice(subtotal)} />
               <SummaryRow label="Delivery Charge" value={formatPrice(deliveryCharge)} />

@@ -157,14 +157,21 @@ export function subscribeOrders(onChange: () => void): () => void {
 
 /** Builds the pre-filled WhatsApp message text for a confirmed/created order. */
 export function buildWhatsappMessage(order: Order): string {
-  // Our note field is stored as "Delivery Zone: X — actual customer note",
+  // Our note field is stored as "Delivery Zone: X — Spin Discount: -Y% — actual note",
   // so split those back apart here for a cleaner, separate display.
   let zoneLine: string | null = null;
+  let spinLine: string | null = null;
   let noteLine: string | null = order.note ?? null;
   if (noteLine?.startsWith("Delivery Zone:")) {
     const parts = noteLine.split(" — ");
     zoneLine = parts[0].replace("Delivery Zone:", "").trim();
-    noteLine = parts.slice(1).join(" — ").trim() || null;
+    const rest = parts.slice(1);
+    if (rest[0]?.startsWith("Spin Discount:")) {
+      spinLine = rest[0].replace("Spin Discount:", "").trim();
+      noteLine = rest.slice(1).join(" — ").trim() || null;
+    } else {
+      noteLine = rest.join(" — ").trim() || null;
+    }
   }
 
   const lines = [
@@ -178,6 +185,7 @@ export function buildWhatsappMessage(order: Order): string {
     order.product_url ? `Link: ${order.product_url}` : null,
     "",
     "💰 *Payment*",
+    spinLine ? `🎉 Spin Discount: ${spinLine} applied` : null,
     `Unit Price: ৳${order.unit_price}`,
     `Delivery Charge: ৳${order.delivery_charge}`,
     `*Total: ৳${order.total_price}*`,

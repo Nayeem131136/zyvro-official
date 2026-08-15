@@ -11,6 +11,7 @@ import { PriceDisplay } from "@/components/PriceDisplay";
 import { SizeGuideButton } from "@/components/SizeGuideButton";
 import { NotifyMeModal } from "@/components/NotifyMeModal";
 import { OrderModal } from "@/components/OrderModal";
+import { useActiveSpinOffer, applySpinDiscount } from "@/lib/spin";
 import {
   fetchProductBySlug,
   fetchPublishedProducts,
@@ -182,12 +183,14 @@ function ProductPage() {
   const selectedSize: VariantSize | null =
     selectedVariant?.sizes.find((s) => s.id === selectedSizeId) ?? null;
 
-  const priceBase =
+  const priceBeforeSpin =
     selectedSize?.price_override != null
       ? Number(selectedSize.price_override)
       : selectedVariant?.price_override != null
       ? Number(selectedVariant.price_override)
       : effectivePrice(product);
+  const { offer: spinOffer } = useActiveSpinOffer();
+  const priceBase = spinOffer ? applySpinDiscount(priceBeforeSpin, spinOffer.percent) : priceBeforeSpin;
 
   const stockTotal = product.total_stock ?? totalStock(product);
   const isComingSoon = product.status === "coming_soon";
@@ -306,7 +309,12 @@ function ProductPage() {
                 <h1 className="font-display text-4xl md:text-6xl leading-tight">{product.name}</h1>
               </div>
 
-              <PriceDisplay price={priceBase} regular={product.regular_price} size="lg" showDiscountPct />
+              <PriceDisplay price={priceBase} regular={priceBeforeSpin} size="lg" showDiscountPct />
+              {spinOffer && (
+                <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] tracked-wide text-[color:var(--gold-bright)] border border-[color:var(--gold)]/40 px-2.5 py-1">
+                  🎉 {spinOffer.percent}% Spin Discount Applied
+                </div>
+              )}
 
               <div className="gold-hairline w-full" />
 
@@ -486,6 +494,7 @@ function ProductPage() {
           colorName: selectedVariant ? colorMap.get(selectedVariant.color_id)?.name : null,
           sizeName: selectedSize ? sizeMap.get(selectedSize.size_id)?.name : null,
           unitPrice: priceBase,
+          spinPercent: spinOffer?.percent ?? null,
         }}
       />
 

@@ -104,15 +104,17 @@ export interface ProductCardRow extends ProductRow {
   total_stock: number;
 }
 
+/**
+ * Site policy: no more static "sale_price" markdowns — every product shows
+ * its regular price. The only discount mechanism is the Spin & Win wheel
+ * (see src/lib/spin.ts), applied client-side on top of this base price.
+ */
 export function effectivePrice(p: Pick<ProductRow, "regular_price" | "sale_price">): number {
-  return p.sale_price != null && p.sale_price > 0 ? Number(p.sale_price) : Number(p.regular_price);
+  return Number(p.regular_price);
 }
 
-export function discountPercent(p: Pick<ProductRow, "regular_price" | "sale_price">): number | null {
-  const reg = Number(p.regular_price);
-  const sale = p.sale_price != null ? Number(p.sale_price) : null;
-  if (!sale || !reg || sale >= reg) return null;
-  return Math.round(((reg - sale) / reg) * 100);
+export function discountPercent(_p: Pick<ProductRow, "regular_price" | "sale_price">): number | null {
+  return null;
 }
 
 export function totalStock(p: ProductWithVariants): number {

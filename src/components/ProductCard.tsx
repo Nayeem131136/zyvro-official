@@ -3,6 +3,7 @@ import type { ProductRow } from "@/lib/products";
 import { effectivePrice } from "@/lib/products";
 import { ProductBadges } from "./ProductBadges";
 import { PriceDisplay } from "./PriceDisplay";
+import { useActiveSpinOffer, applySpinDiscount } from "@/lib/spin";
 
 export function ProductCard({
   product,
@@ -11,7 +12,9 @@ export function ProductCard({
   product: ProductRow;
   totalStock?: number;
 }) {
-  const price = effectivePrice(product);
+  const regular = effectivePrice(product);
+  const { offer } = useActiveSpinOffer();
+  const price = offer ? applySpinDiscount(regular, offer.percent) : regular;
   const oos = typeof totalStock === "number" && totalStock <= 0 && product.status === "published";
 
   return (
@@ -54,7 +57,7 @@ export function ProductCard({
         <h3 className="font-display text-base sm:text-lg tracked-wide truncate group-hover:text-[color:var(--gold-bright)] transition-colors">
           {product.name}
         </h3>
-        <PriceDisplay price={price} regular={product.regular_price} size="sm" />
+        <PriceDisplay price={price} regular={offer ? regular : null} showDiscountPct={!!offer} size="sm" />
       </div>
     </Link>
   );
