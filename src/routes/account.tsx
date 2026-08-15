@@ -5,7 +5,7 @@ import { Loader2, Package, LogOut, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-import { fetchMyOrders, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, type Order, type OrderStatus } from "@/lib/orders";
+import { fetchMyOrders, fetchOrderItems, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, type Order, type OrderStatus } from "@/lib/orders";
 import { formatPrice } from "@/lib/settings";
 import { STEADFAST_STATUS_LABEL } from "@/lib/steadfast";
 
@@ -121,6 +121,31 @@ function AccountPage() {
   );
 }
 
+function MyOrderItems({ orderId, total }: { orderId: string; total: number }) {
+  const { data: items = [] } = useQuery({
+    queryKey: ["order-items", orderId],
+    queryFn: () => fetchOrderItems(orderId),
+  });
+  return (
+    <div className="mb-4 space-y-1.5">
+      {items.map((it) => (
+        <div key={it.id} className="text-sm flex justify-between gap-2">
+          <span className="min-w-0 truncate">
+            {it.product_name}
+            {it.color_name ? ` · ${it.color_name}` : ""}
+            {it.size_name ? ` · ${it.size_name}` : ""} · {it.quantity}x
+          </span>
+          <span className="text-muted-foreground shrink-0">{formatPrice(it.subtotal)}</span>
+        </div>
+      ))}
+      <div className="text-sm pt-1 border-t border-white/5 flex justify-between">
+        <span className="text-muted-foreground">Total</span>
+        <span className="text-[color:var(--gold-bright)]">{formatPrice(total)}</span>
+      </div>
+    </div>
+  );
+}
+
 function OrderCard({ order: o }: { order: Order }) {
   const stepIndex = ORDER_STATUS_FLOW.indexOf(o.status);
   const isTerminalNegative = o.status === "cancelled" || o.status === "rejected";
@@ -137,12 +162,16 @@ function OrderCard({ order: o }: { order: Order }) {
         <StatusBadge status={o.status} />
       </div>
 
-      <div className="text-sm mb-4">
-        {o.product_name}
-        {o.color_name ? ` · ${o.color_name}` : ""}
-        {o.size_name ? ` · ${o.size_name}` : ""} · {o.quantity}x
-        <span className="text-[color:var(--gold-bright)] ml-2">{formatPrice(o.total_price)}</span>
-      </div>
+      {o.is_multi_item ? (
+        <MyOrderItems orderId={o.id} total={o.total_price} />
+      ) : (
+        <div className="text-sm mb-4">
+          {o.product_name}
+          {o.color_name ? ` · ${o.color_name}` : ""}
+          {o.size_name ? ` · ${o.size_name}` : ""} · {o.quantity}x
+          <span className="text-[color:var(--gold-bright)] ml-2">{formatPrice(o.total_price)}</span>
+        </div>
+      )}
 
       {!isTerminalNegative && (
         <div className="flex items-center gap-1 mb-4">

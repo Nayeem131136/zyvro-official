@@ -50,11 +50,26 @@ export type Order = {
   total_price: number;
   status: OrderStatus;
   customer_user_id: string | null;
+  is_multi_item: boolean;
   steadfast_consignment_id: string | null;
   steadfast_tracking_code: string | null;
   steadfast_status: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type OrderItem = {
+  id: string;
+  order_id: string;
+  product_id: string | null;
+  product_name: string;
+  product_url: string | null;
+  color_name: string | null;
+  size_name: string | null;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  sort_order: number;
 };
 
 export type NewOrderInput = {
@@ -95,6 +110,92 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
     .single();
   if (error) throw error;
   return data as Order;
+}
+
+export type NewCartItemInput = {
+  product_id?: string | null;
+  product_name: string;
+  product_url?: string;
+  color_name?: string;
+  size_name?: string;
+  quantity: number;
+  unit_price: number;
+};
+
+export type NewCartOrderInput = {
+  customer_name: string;
+  phone: string;
+  district: string;
+  area: string;
+  address: string;
+  note?: string;
+  delivery_charge: number;
+  customer_user_id?: string | null;
+  items: NewCartItemInput[];
+};
+
+/** Customer-facing: create a multi-item (cart) order header + its line items. */
+export async function createCartOrder(input: NewCartOrderInput): Promise<{ order: Order; items: OrderItem[] }> {
+  const itemsSubtotal = input.items.reduce((s, it) => s + it.unit_price * it.quantity, 0);
+  const totalQty = input.items.reduce((s, it) => s + it.quantity, 0);
+  const summaryName =
+    input.items.length === 1
+      ? input.items[0].product_name
+      : `${input.items.length} designs (${input.items.map((i) => i.product_name).join(", ")})`;
+
+  const { data: order, error: orderErr } = await supabase
+    .from("orders")
+    .insert({
+      customer_name: input.customer_name,
+      phone: normalizeBdPhone(input.phone),
+      district: input.district,
+      area: input.area,
+      address: input.address,
+      note: input.note ?? null,
+      product_id: input.items.length === 1 ? input.items[0].product_id ?? null : null,
+      product_name: summaryName,
+      product_url: input.items.length === 1 ? input.items[0].product_url ?? null : null,
+      color_name: input.items.length === 1 ? input.items[0].color_name ?? null : null,
+      size_name: input.items.length === 1 ? input.items[0].size_name ?? null : null,
+      quantity: totalQty,
+      unit_price: input.items.length === 1 ? input.items[0].unit_price : 0,
+      delivery_charge: input.delivery_charge,
+      total_price: itemsSubtotal + input.delivery_charge,
+      is_multi_item: input.items.length > 1,
+      customer_user_id: input.customer_user_id ?? null,
+      status: "pending",
+    })
+    .select("*")
+    .single();
+  if (orderErr) throw orderErr;
+
+  const itemRows = input.items.map((it, idx) => ({
+    order_id: order.id,
+    product_id: it.product_id ?? null,
+    product_name: it.product_name,
+    product_url: it.product_url ?? null,
+    color_name: it.color_name ?? null,
+    size_name: it.size_name ?? null,
+    quantity: it.quantity,
+    unit_price: it.unit_price,
+    subtotal: it.unit_price * it.quantity,
+    sort_order: idx,
+  }));
+  const { data: items, error: itemsErr } = await supabase.from("order_items").insert(itemRows).select("*");
+  if (itemsErr) throw itemsErr;
+
+  return { order: order as Order, items: (items ?? []) as OrderItem[] };
+}
+
+/** Fetch the line items for one order (multi-item orders only). */
+export async function fetchOrderItems(orderId: string): Promise<OrderItem[]> {
+  const { data, error } = await supabase
+    .from("order_items")
+    .select("*")
+    .eq("order_id", orderId)
+    .order("sort_order");
+  if (error) throw error;
+  return (data ?? []) as OrderItem[];
 }
 
 /** Admin-only: list all orders, newest first. */
@@ -187,6 +288,59 @@ export function buildWhatsappMessage(order: Order): string {
     "💰 *Payment*",
     spinLine ? `🎉 Spin Discount: ${spinLine} applied` : null,
     `Unit Price: ৳${order.unit_price}`,
+    `Delivery Charge: ৳${order.delivery_charge}`,
+    `*Total: ৳${order.total_price}*`,
+    "",
+    "📍 *Delivery Details*",
+    order.customer_name,
+    order.phone,
+    zoneLine ? `${order.area}, ${zoneLine}` : `${order.area}, ${order.district}`,
+    order.address,
+    noteLine ? `📝 Note: ${noteLine}` : null,
+    "",
+    "━━━━━━━━━━━━━━━",
+    `✅ *To confirm:* please pay only the delivery charge (৳${order.delivery_charge}) in advance via bKash/Nagad — the product price is Cash on Delivery.`,
+    "",
+    "🙏 Please confirm my order. Thank you — ZYVRO 🖤",
+  ].filter((l): l is string => l !== null);
+  return lines.join("\n");
+}
+
+/** Builds the pre-filled WhatsApp message text for a multi-item cart order. */
+export function buildWhatsappMessageMulti(order: Order, items: OrderItem[]): string {
+  let zoneLine: string | null = null;
+  let spinLine: string | null = null;
+  let noteLine: string | null = order.note ?? null;
+  if (noteLine?.startsWith("Delivery Zone:")) {
+    const parts = noteLine.split(" — ");
+    zoneLine = parts[0].replace("Delivery Zone:", "").trim();
+    const rest = parts.slice(1);
+    if (rest[0]?.startsWith("Spin Discount:")) {
+      spinLine = rest[0].replace("Spin Discount:", "").trim();
+      noteLine = rest.slice(1).join(" — ").trim() || null;
+    } else {
+      noteLine = rest.join(" — ").trim() || null;
+    }
+  }
+
+  const itemsSubtotal = items.reduce((s, it) => s + it.subtotal, 0);
+
+  const lines = [
+    "🛍️ *ZYVRO — NEW ORDER*",
+    "━━━━━━━━━━━━━━━",
+    `Order ID: *${order.order_no}*`,
+    "",
+    `📦 *${items.length} Item${items.length > 1 ? "s" : ""}*`,
+    ...items.flatMap((it, i) => [
+      `${i + 1}. ${it.product_name}`,
+      [it.color_name, it.size_name, `Qty: ${it.quantity}`].filter(Boolean).join("   |   "),
+      `   ৳${it.unit_price} × ${it.quantity} = ৳${it.subtotal}`,
+      it.product_url ? `   Link: ${it.product_url}` : null,
+    ]),
+    "",
+    "💰 *Payment*",
+    spinLine ? `🎉 Spin Discount: ${spinLine} applied` : null,
+    `Items Subtotal: ৳${itemsSubtotal}`,
     `Delivery Charge: ৳${order.delivery_charge}`,
     `*Total: ৳${order.total_price}*`,
     "",

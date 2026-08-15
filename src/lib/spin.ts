@@ -1,12 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export const SPIN_SEGMENTS = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30] as const;
+export const SPIN_SEGMENTS = [6, 9, 12, 15, 18, 21, 24, 27, 30, 35] as const;
 export type SpinSegment = (typeof SPIN_SEGMENTS)[number];
 
 // Weighted so the wheel *usually* (not always — it should still feel like a
-// real spin) lands somewhere in the 15–25% sweet spot, per the "twist".
+// real spin) lands in the 15–30% range, per the "twist".
 const SEGMENT_WEIGHTS: Record<SpinSegment, number> = {
-  3: 3, 6: 5, 9: 7, 12: 10, 15: 16, 18: 18, 21: 18, 24: 14, 27: 6, 30: 3,
+  6: 2, 9: 3, 12: 5, 15: 14, 18: 16, 21: 16, 24: 14, 27: 10, 30: 8, 35: 4,
 };
 
 /** Weighted-random pick of a segment (and its index, for animating the wheel to it). */

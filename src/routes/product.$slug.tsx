@@ -2,7 +2,7 @@ import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-ro
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { MessageCircle, ArrowLeft, Share2, Bell, ChevronLeft, ChevronRight } from "lucide-react";
+import { MessageCircle, ArrowLeft, Share2, Bell, ChevronLeft, ChevronRight, ShoppingBag } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { ProductCard } from "@/components/ProductCard";
@@ -12,6 +12,7 @@ import { SizeGuideButton } from "@/components/SizeGuideButton";
 import { NotifyMeModal } from "@/components/NotifyMeModal";
 import { OrderModal } from "@/components/OrderModal";
 import { useActiveSpinOffer, applySpinDiscount } from "@/lib/spin";
+import { addToCart } from "@/lib/cart";
 import {
   fetchProductBySlug,
   fetchPublishedProducts,
@@ -148,6 +149,24 @@ function ProductPage() {
     };
   }, []);
 
+  function handleAddToCart() {
+    if (!canOrder) {
+      toast.error("Please select a size first");
+      return;
+    }
+    addToCart({
+      key: `${product.id}:${selectedVariant?.color_id ?? ""}:${selectedSize?.size_id ?? ""}`,
+      productId: product.id,
+      name: product.name,
+      slug: product.slug,
+      thumbnail: activeImage || product.thumbnail_url || "",
+      colorName: selectedVariant ? colorMap.get(selectedVariant.color_id)?.name ?? null : null,
+      sizeName: selectedSize ? sizeMap.get(selectedSize.size_id)?.name ?? null : null,
+      unitPrice: priceBeforeSpin,
+    });
+    toast.success("Added to cart");
+  }
+
   function handleOrderClick() {
     if (!canOrder) {
       toast.error("Please select a size first");
@@ -183,12 +202,11 @@ function ProductPage() {
   const selectedSize: VariantSize | null =
     selectedVariant?.sizes.find((s) => s.id === selectedSizeId) ?? null;
 
-  const priceBeforeSpin =
-    selectedSize?.price_override != null
-      ? Number(selectedSize.price_override)
-      : selectedVariant?.price_override != null
-      ? Number(selectedVariant.price_override)
-      : effectivePrice(product);
+  // Site policy: one uniform price for every product (499৳) — the only
+  // discount mechanism is the Spin & Win wheel. Per-variant/size price
+  // overrides are ignored here so a stray leftover override never shows a
+  // different price than the rest of the site.
+  const priceBeforeSpin = effectivePrice(product);
   const { offer: spinOffer } = useActiveSpinOffer();
   const priceBase = spinOffer ? applySpinDiscount(priceBeforeSpin, spinOffer.percent) : priceBeforeSpin;
 
@@ -409,13 +427,23 @@ function ProductPage() {
                     <Bell className="h-5 w-5" /> Notify When Available
                   </button>
                 ) : (
-                  <button
-                    onClick={handleOrderClick}
-                    className={`btn-zy flex-1 !py-4 ${!canOrder ? "opacity-60" : ""}`}
-                  >
-                    <MessageCircle className="h-5 w-5" />
-                    Order on WhatsApp
-                  </button>
+                  <>
+                    <button
+                      onClick={handleAddToCart}
+                      disabled={!canOrder}
+                      className={`btn-zy-outline !py-4 !px-5 ${!canOrder ? "opacity-60" : ""}`}
+                      aria-label="Add to cart"
+                    >
+                      <ShoppingBag className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={handleOrderClick}
+                      className={`btn-zy flex-1 !py-4 ${!canOrder ? "opacity-60" : ""}`}
+                    >
+                      <MessageCircle className="h-5 w-5" />
+                      Order on WhatsApp
+                    </button>
+                  </>
                 )}
                 <button onClick={share} className="btn-zy-outline !py-4 !px-4" aria-label="Share">
                   <Share2 className="h-5 w-5" />
@@ -468,12 +496,22 @@ function ProductPage() {
             <Bell className="h-4 w-4" /> Notify Me
           </button>
         ) : (
-          <button
-            onClick={handleOrderClick}
-            className={`btn-zy !py-3 !text-xs shrink-0 ${!canOrder ? "opacity-60" : ""}`}
-          >
-            <MessageCircle className="h-4 w-4" /> Order
-          </button>
+          <>
+            <button
+              onClick={handleAddToCart}
+              disabled={!canOrder}
+              className={`btn-zy-outline !py-3 !px-3 shrink-0 ${!canOrder ? "opacity-60" : ""}`}
+              aria-label="Add to cart"
+            >
+              <ShoppingBag className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleOrderClick}
+              className={`btn-zy !py-3 !text-xs shrink-0 ${!canOrder ? "opacity-60" : ""}`}
+            >
+              <MessageCircle className="h-4 w-4" /> Order
+            </button>
+          </>
         )}
       </div>
 

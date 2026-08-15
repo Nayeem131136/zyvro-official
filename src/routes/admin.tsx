@@ -34,6 +34,7 @@ import {
   buildWhatsappMessage,
   whatsappUrl,
   updateOrderDeliveryCharge,
+  fetchOrderItems,
   ORDER_STATUS_FLOW,
   ORDER_STATUS_LABEL,
   type Order,
@@ -1494,6 +1495,29 @@ function DeliveryChargeEditor({ order: o }: { order: Order }) {
   );
 }
 
+function OrderItemsList({ orderId }: { orderId: string }) {
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ["order-items", orderId],
+    queryFn: () => fetchOrderItems(orderId),
+  });
+  if (isLoading) return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
+  return (
+    <div className="border border-white/10 divide-y divide-white/5">
+      {items.map((it) => (
+        <div key={it.id} className="px-3 py-2 flex items-center justify-between text-xs">
+          <div>
+            <div>{it.product_name}</div>
+            <div className="text-[11px] text-muted-foreground">
+              {[it.color_name, it.size_name, `× ${it.quantity}`].filter(Boolean).join("  |  ")}
+            </div>
+          </div>
+          <span className="text-[color:var(--gold-bright)] shrink-0">{formatPrice(it.subtotal)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function OrdersTab() {
   const qc = useQueryClient();
   const { data: orders = [], isLoading } = useQuery({
@@ -1607,7 +1631,7 @@ function OrdersTab() {
                       <span className="text-muted-foreground font-sans normal-case tracking-normal">— {o.customer_name}</span>
                     </div>
                     <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                      {o.product_name} {o.color_name ? `· ${o.color_name}` : ""} {o.size_name ? `· ${o.size_name}` : ""} · {o.quantity}x · {formatPrice(o.total_price)}
+                      {o.is_multi_item ? `🛒 Multi-item order · ${o.quantity} pcs` : `${o.product_name} ${o.color_name ? `· ${o.color_name}` : ""} ${o.size_name ? `· ${o.size_name}` : ""} · ${o.quantity}x`} · {formatPrice(o.total_price)}
                     </div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0 ml-3">
@@ -1618,6 +1642,7 @@ function OrdersTab() {
 
                 {isOpen && (
                   <div className="px-4 pb-4 pt-1 space-y-4 bg-white/[0.015]">
+                    {o.is_multi_item && <OrderItemsList orderId={o.id} />}
                     <div className="grid sm:grid-cols-2 gap-4 text-xs">
                       <div className="space-y-1">
                         <div className="text-muted-foreground">Phone</div>

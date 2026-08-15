@@ -1,11 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Menu, X, ShieldCheck, LogOut, Package, Gift } from "lucide-react";
+import { Menu, X, ShieldCheck, LogOut, Package, Gift, ShoppingBag } from "lucide-react";
 import logoCleanUrl from "@/assets/zyvro-logo-clean.png";
 import { useAdminSession } from "@/lib/admin";
 import { supabase } from "@/integrations/supabase/client";
 import { SpinWheelModal } from "@/components/SpinWheelModal";
+import { CartDrawer } from "@/components/CartDrawer";
 import { useActiveSpinOffer } from "@/lib/spin";
+import { useCart } from "@/lib/cart";
 
 const links = [
   { to: "/shop", label: "Shop" },
@@ -20,6 +22,8 @@ export function Navbar() {
   const isSignedIn = !!email;
   const [spinOpen, setSpinOpen] = useState(false);
   const { offer } = useActiveSpinOffer();
+  const [cartOpen, setCartOpen] = useState(false);
+  const { count: cartCount } = useCart();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -64,6 +68,19 @@ export function Navbar() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCartOpen(true)}
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 hover:border-white/30 transition"
+            aria-label="Cart"
+          >
+            <ShoppingBag className="h-4 w-4" />
+            {cartCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 h-4 min-w-4 px-1 rounded-full bg-[color:var(--gold-bright)] text-black text-[10px] font-bold grid place-items-center">
+                {cartCount}
+              </span>
+            )}
+          </button>
           <button
             type="button"
             onClick={() => setSpinOpen(true)}
@@ -194,6 +211,7 @@ export function Navbar() {
       )}
     </header>
     <SpinWheelModal open={spinOpen} onClose={() => setSpinOpen(false)} />
+    <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
     </>
   );
 }
