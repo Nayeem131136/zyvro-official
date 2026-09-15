@@ -136,3 +136,28 @@ export async function deleteProductImage(url: string | null | undefined) {
   if (!path) return;
   await supabase.storage.from(PRODUCTS_BUCKET).remove([path]);
 }
+
+export type StorageImage = {
+  path: string;
+  url: string;
+  createdAt: string | null;
+  sizeBytes: number | null;
+};
+
+/** List every image ever uploaded to the products bucket, with a fresh signed URL each. */
+export async function listAllProductImages(): Promise<StorageImage[]> {
+  const { data, error } = await supabase.storage.from(PRODUCTS_BUCKET).list("", {
+    limit: 1000,
+    sortBy: { column: "created_at", order: "desc" },
+  });
+  if (error) throw error;
+  const files = (data ?? []).filter((f) => f.name && f.id); // real files only, not folder placeholders
+  return Promise.all(
+    files.map(async (f) => ({
+      path: f.name,
+      url: await getProductImageUrl(f.name),
+      createdAt: f.created_at ?? null,
+      sizeBytes: (f.metadata as { size?: number } | null)?.size ?? null,
+    })),
+  );
+}

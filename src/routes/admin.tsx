@@ -26,7 +26,7 @@ import {
   type Color,
   type Size,
 } from "@/lib/taxonomy";
-import { ADMIN_EMAIL, uploadProductImage, deleteProductImage } from "@/lib/admin";
+import { ADMIN_EMAIL, uploadProductImage, deleteProductImage, listAllProductImages, type StorageImage } from "@/lib/admin";
 import {
   fetchOrders,
   updateOrderStatus,
@@ -48,6 +48,7 @@ import {
   Loader2, LogOut, Pencil, Plus, Trash2, X, ExternalLink, Upload, Copy, Palette,
   Ruler, Tag, FolderOpen, Package, ChevronDown, ChevronUp, Image as ImageIcon,
   LayoutDashboard, ClipboardList, Settings, MessageCircle, Check, Ban, Star,
+  Download, Archive,
 } from "lucide-react";
 import logoAsset from "@/assets/zyvro-logo.png";
 
@@ -62,7 +63,7 @@ export const Route = createFileRoute("/admin")({
 });
 
 type AuthState = "loading" | "unauth" | "ok";
-type Tab = "dashboard" | "orders" | "products" | "collections" | "colors" | "sizes" | "settings";
+type Tab = "dashboard" | "orders" | "products" | "collections" | "colors" | "sizes" | "media" | "settings";
 
 function AdminPage() {
   const navigate = useNavigate();
@@ -126,6 +127,7 @@ function AdminDashboard({ email, onSignOut }: { email: string; onSignOut: () => 
     { id: "collections", label: "Collections", icon: Tag },
     { id: "colors", label: "Colors", icon: Palette },
     { id: "sizes", label: "Sizes", icon: Ruler },
+    { id: "media", label: "Media", icon: ImageIcon },
     { id: "settings", label: "Settings", icon: Settings },
   ];
   return (
@@ -176,6 +178,7 @@ function AdminDashboard({ email, onSignOut }: { email: string; onSignOut: () => 
         {tab === "collections" && <TaxonomyTab kind="collections" />}
         {tab === "colors" && <TaxonomyTab kind="colors" />}
         {tab === "sizes" && <TaxonomyTab kind="sizes" />}
+        {tab === "media" && <MediaTab />}
         {tab === "settings" && <SettingsTab />}
       </main>
     </div>
@@ -1761,6 +1764,131 @@ function OrdersTab() {
 }
 
 /* ============ SETTINGS TAB ============ */
+
+function MediaTab() {
+  const { data: images = [], isLoading, refetch, isFetching } = useQuery({
+    queryKey: ["admin", "media"],
+    queryFn: listAllProductImages,
+  });
+  const [zipping, setZipping] = useState(false);
+  const [zipProgress, setZipProgress] = useState(0);
+
+  async function downloadOne(img: StorageImage) {
+    try {
+      const res = await fetch(img.url);
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = img.path;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      toast.error(`Couldn't download ${img.path}`);
+    }
+  }
+
+  async function downloadAllAsZip() {
+    if (images.length === 0) return;
+    setZipping(true);
+    setZipProgress(0);
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      let done = 0;
+      for (const img of images) {
+        try {
+          const res = await fetch(img.url);
+          const blob = await res.blob();
+          zip.file(img.path, blob);
+        } catch {
+          console.warn("Skipped (failed to fetch):", img.path);
+        }
+        done += 1;
+        setZipProgress(Math.round((done / images.length) * 100));
+      }
+      const content = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(content);
+      a.download = `zyvro-product-images-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+      toast.success(`Downloaded ${images.length} images as a ZIP`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Couldn't build the ZIP file");
+    } finally {
+      setZipping(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div>
+          <h2 className="font-display text-xl">Media Library</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            {isLoading ? "Loading…" : `${images.length} image${images.length === 1 ? "" : "s"} uploaded`}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="btn-zy-outline !py-2 !text-xs"
+          >
+            {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Refresh"}
+          </button>
+          <button
+            onClick={downloadAllAsZip}
+            disabled={zipping || images.length === 0}
+            className="btn-zy !py-2 !text-xs disabled:opacity-50"
+          >
+            {zipping ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Zipping {zipProgress}%
+              </>
+            ) : (
+              <>
+                <Archive className="h-3.5 w-3.5" /> Download All (.zip)
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="py-16 grid place-items-center">
+          <Loader2 className="h-6 w-6 animate-spin text-[color:var(--gold-bright)]" />
+        </div>
+      ) : images.length === 0 ? (
+        <div className="border border-white/10 px-6 py-16 text-center text-sm text-muted-foreground">
+          No images uploaded yet.
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          {images.map((img) => (
+            <div key={img.path} className="group relative border border-white/10 aspect-square overflow-hidden bg-black/30">
+              <img src={img.url} alt={img.path} loading="lazy" className="h-full w-full object-contain" />
+              <button
+                onClick={() => downloadOne(img)}
+                className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition grid place-items-center"
+                title={img.path}
+              >
+                <span className="inline-flex items-center gap-1.5 text-[11px] tracked-wide px-3 py-2 border border-[color:var(--gold)]/50 text-[color:var(--gold-bright)]">
+                  <Download className="h-3.5 w-3.5" /> Download
+                </span>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SettingsTab() {
   const qc = useQueryClient();
