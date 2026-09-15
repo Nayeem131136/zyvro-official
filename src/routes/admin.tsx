@@ -26,7 +26,7 @@ import {
   type Color,
   type Size,
 } from "@/lib/taxonomy";
-import { ADMIN_EMAIL, uploadProductImage, deleteProductImage, listAllProductImages, type StorageImage } from "@/lib/admin";
+import { ADMIN_EMAIL, uploadProductImage, deleteProductImage, listUsedProductImages, type StorageImage } from "@/lib/admin";
 import {
   fetchOrders,
   updateOrderStatus,
@@ -1767,19 +1767,41 @@ function OrdersTab() {
 
 function MediaTab() {
   const { data: images = [], isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["admin", "media"],
-    queryFn: listAllProductImages,
+    queryKey: ["admin", "media", "used"],
+    queryFn: listUsedProductImages,
   });
   const [zipping, setZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState(0);
 
+  async function toPngBlob(url: string): Promise<Blob> {
+    const res = await fetch(url);
+    const srcBlob = await res.blob();
+    const bitmap = await createImageBitmap(srcBlob);
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas unavailable");
+      ctx.drawImage(bitmap, 0, 0);
+      const pngBlob: Blob | null = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png"));
+      if (!pngBlob) throw new Error("PNG conversion failed");
+      return pngBlob;
+    } finally {
+      bitmap.close();
+    }
+  }
+
+  function pngName(path: string) {
+    return path.replace(/\.(jpg|jpeg|webp)$/i, "") + ".png";
+  }
+
   async function downloadOne(img: StorageImage) {
     try {
-      const res = await fetch(img.url);
-      const blob = await res.blob();
+      const blob = await toPngBlob(img.url);
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = img.path;
+      a.download = pngName(img.path);
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1799,11 +1821,10 @@ function MediaTab() {
       let done = 0;
       for (const img of images) {
         try {
-          const res = await fetch(img.url);
-          const blob = await res.blob();
-          zip.file(img.path, blob);
+          const pngBlob = await toPngBlob(img.url);
+          zip.file(pngName(img.path), pngBlob);
         } catch {
-          console.warn("Skipped (failed to fetch):", img.path);
+          console.warn("Skipped (failed to convert):", img.path);
         }
         done += 1;
         setZipProgress(Math.round((done / images.length) * 100));
@@ -1816,7 +1837,7 @@ function MediaTab() {
       a.click();
       a.remove();
       URL.revokeObjectURL(a.href);
-      toast.success(`Downloaded ${images.length} images as a ZIP`);
+      toast.success(`Downloaded ${images.length} images as a ZIP (PNG)`);
     } catch (err) {
       console.error(err);
       toast.error("Couldn't build the ZIP file");
@@ -1831,7 +1852,7 @@ function MediaTab() {
         <div>
           <h2 className="font-display text-xl">Media Library</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            {isLoading ? "Loading…" : `${images.length} image${images.length === 1 ? "" : "s"} uploaded`}
+            {isLoading ? "Loading…" : `${images.length} image${images.length === 1 ? "" : "s"} currently visible on the site (downloads as PNG)`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1853,7 +1874,7 @@ function MediaTab() {
               </>
             ) : (
               <>
-                <Archive className="h-3.5 w-3.5" /> Download All (.zip)
+                <Archive className="h-3.5 w-3.5" /> Download All (.zip, PNG)
               </>
             )}
           </button>

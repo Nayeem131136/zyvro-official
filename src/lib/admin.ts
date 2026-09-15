@@ -137,6 +137,42 @@ export async function deleteProductImage(url: string | null | undefined) {
   await supabase.storage.from(PRODUCTS_BUCKET).remove([path]);
 }
 
+/**
+ * Every image URL actually shown to customers on the site: product
+ * thumbnails, gallery images, and per-color variant images. Excludes
+ * orphaned/unused files left over in storage from cancelled uploads etc.
+ */
+export async function listUsedProductImages(): Promise<StorageImage[]> {
+  const [{ data: products, error: e1 }, { data: gallery, error: e2 }, { data: variantImgs, error: e3 }] =
+    await Promise.all([
+      supabase.from("products").select("thumbnail_url"),
+      supabase.from("product_images").select("url"),
+      supabase.from("product_variant_images").select("url"),
+    ]);
+  if (e1) throw e1;
+  if (e2) throw e2;
+  if (e3) throw e3;
+
+  const urls = [
+    ...(products ?? []).map((p) => p.thumbnail_url),
+    ...(gallery ?? []).map((g) => g.url),
+    ...(variantImgs ?? []).map((v) => v.url),
+  ];
+
+  const paths = Array.from(new Set(urls.map(extractStoragePath).filter((p): p is string => !!p)));
+
+  const results = await Promise.all(
+    paths.map(async (path) => {
+      try {
+        return { path, url: await getProductImageUrl(path), createdAt: null, sizeBytes: null };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return results.filter((r): r is StorageImage => r !== null);
+}
+
 export type StorageImage = {
   path: string;
   url: string;
