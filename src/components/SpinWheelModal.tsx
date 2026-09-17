@@ -90,7 +90,7 @@ export function SpinWheelModal({ open, onClose }: { open: boolean; onClose: () =
 
           <div className="text-xs tracked-wide text-[color:var(--gold-bright)] mb-1">ZYVRO EXCLUSIVE</div>
           <h2 className="font-display text-2xl mb-1">Spin & Win</h2>
-          <p className="text-xs text-muted-foreground mb-6">Up to 35% OFF — every product, one spin.</p>
+          <p className="text-xs text-muted-foreground mb-6">Up to 50% OFF — every product, one spin.</p>
 
           {isSignedIn === false && (
             <div className="space-y-4 py-6">
