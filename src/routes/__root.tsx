@@ -12,6 +12,33 @@ import appCss from "../styles.css?url";
 import { reportAppError } from "../lib/error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 
+/**
+ * After a new deploy, a visitor's already-open tab (or one opened right as
+ * the deploy finished) can still be holding references to the PREVIOUS
+ * build's JS chunk filenames. Those old chunks no longer exist on the
+ * server, so any dynamic import() for a route/component fails with this
+ * error. It is not a code bug — it's a stale-build mismatch — and the fix
+ * is simply to reload the page once, which fetches the current index.html
+ * and its correct (current) chunk references.
+ */
+const RELOAD_GUARD_KEY = "zyvro_chunk_reload_once";
+
+function isChunkLoadError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed/i.test(
+    message,
+  );
+}
+
+function reloadOnceForStaleChunk() {
+  if (typeof window === "undefined") return;
+  // Guard against an infinite reload loop if something is genuinely broken
+  // server-side (in which case we fall through to the normal error UI).
+  if (window.sessionStorage.getItem(RELOAD_GUARD_KEY)) return;
+  window.sessionStorage.setItem(RELOAD_GUARD_KEY, "1");
+  window.location.reload();
+}
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -34,6 +61,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
   useEffect(() => {
     reportAppError(error, { boundary: "tanstack_root_error_component" });
+    if (isChunkLoadError(error)) reloadOnceForStaleChunk();
   }, [error]);
 
   return (
@@ -117,6 +145,25 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    // Vite fires this specific event when a dynamic import() 404s because
+    // the browser is holding chunk references from a build that's since
+    // been replaced by a new deploy. Reload once to pick up the current build.
+    const handler = () => reloadOnceForStaleChunk();
+    window.addEventListener("vite:preloadError", handler);
+    // Clear the one-time guard after the app has been stable for a bit, so
+    // a *later* genuine stale-chunk event (e.g. another deploy happens
+    // while this tab stays open) can still trigger one more auto-reload.
+    const clearGuard = window.setTimeout(() => {
+      window.sessionStorage.removeItem(RELOAD_GUARD_KEY);
+    }, 5000);
+    return () => {
+      window.removeEventListener("vite:preloadError", handler);
+      window.clearTimeout(clearGuard);
+    };
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
