@@ -173,6 +173,32 @@ export async function listUsedProductImages(): Promise<StorageImage[]> {
   return results.filter((r): r is StorageImage => r !== null);
 }
 
+/** Fetch an image URL, convert it to PNG, and trigger a browser download. */
+export async function downloadImageAsPng(url: string, filename: string) {
+  const res = await fetch(url);
+  const srcBlob = await res.blob();
+  const bitmap = await createImageBitmap(srcBlob);
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas unavailable");
+    ctx.drawImage(bitmap, 0, 0);
+    const pngBlob: Blob | null = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png"));
+    if (!pngBlob) throw new Error("PNG conversion failed");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(pngBlob);
+    a.download = filename.endsWith(".png") ? filename : `${filename}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  } finally {
+    bitmap.close();
+  }
+}
+
 export type StorageImage = {
   path: string;
   url: string;

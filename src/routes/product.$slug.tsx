@@ -2,7 +2,7 @@ import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-ro
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { MessageCircle, ArrowLeft, Share2, Bell, ChevronLeft, ChevronRight, ShoppingBag } from "lucide-react";
+import { MessageCircle, ArrowLeft, Share2, Bell, ChevronLeft, ChevronRight, ShoppingBag, Download, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { ProductCard } from "@/components/ProductCard";
@@ -13,6 +13,7 @@ import { NotifyMeModal } from "@/components/NotifyMeModal";
 import { OrderModal } from "@/components/OrderModal";
 import { useActiveSpinOffer, applySpinDiscount } from "@/lib/spin";
 import { addToCart } from "@/lib/cart";
+import { useAdminSession, downloadImageAsPng } from "@/lib/admin";
 import {
   fetchProductBySlug,
   fetchPublishedProducts,
@@ -128,6 +129,8 @@ function ProductPage() {
   );
   const [selectedSizeId, setSelectedSizeId] = useState<string | null>(null);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
+  const { isAdmin } = useAdminSession();
+  const [downloadingIdx, setDownloadingIdx] = useState<number | null>(null);
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
   const navigate = useNavigate();
@@ -148,6 +151,17 @@ function ProductPage() {
       sub.subscription.unsubscribe();
     };
   }, []);
+
+  async function handleDownloadImage(url: string, idx: number) {
+    setDownloadingIdx(idx);
+    try {
+      await downloadImageAsPng(url, `${product.slug}-${idx + 1}`);
+    } catch {
+      toast.error("Couldn't download image");
+    } finally {
+      setDownloadingIdx(null);
+    }
+  }
 
   function handleAddToCart() {
     if (!canOrder) {
@@ -279,6 +293,20 @@ function ProductPage() {
                     size="md"
                   />
                 </div>
+                {isAdmin && activeImage && (
+                  <button
+                    onClick={() => handleDownloadImage(activeImage, activeImageIdx)}
+                    disabled={downloadingIdx === activeImageIdx}
+                    title="Download image (PNG) — admin only"
+                    className="absolute bottom-3 right-3 h-9 w-9 grid place-items-center bg-black/60 backdrop-blur border border-[color:var(--gold)]/50 text-[color:var(--gold-bright)] hover:bg-black/80 transition z-10"
+                  >
+                    {downloadingIdx === activeImageIdx ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                  </button>
+                )}
                 {galleryImages.length > 1 && (
                   <>
                     <button
