@@ -13,7 +13,7 @@ import { NotifyMeModal } from "@/components/NotifyMeModal";
 import { OrderModal } from "@/components/OrderModal";
 import { useActiveSpinOffer, applySpinDiscount } from "@/lib/spin";
 import { addToCart } from "@/lib/cart";
-import { useAdminSession, downloadImageAsPng } from "@/lib/admin";
+import { downloadImageAsPng } from "@/lib/admin";
 import {
   fetchProductBySlug,
   fetchPublishedProducts,
@@ -129,7 +129,6 @@ function ProductPage() {
   );
   const [selectedSizeId, setSelectedSizeId] = useState<string | null>(null);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
-  const { isAdmin } = useAdminSession();
   const [downloadingIdx, setDownloadingIdx] = useState<number | null>(null);
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
@@ -293,11 +292,11 @@ function ProductPage() {
                     size="md"
                   />
                 </div>
-                {isAdmin && activeImage && (
+                {activeImage && (
                   <button
                     onClick={() => handleDownloadImage(activeImage, activeImageIdx)}
                     disabled={downloadingIdx === activeImageIdx}
-                    title="Download image (PNG) — admin only"
+                    title="Download image (PNG)"
                     className="absolute bottom-3 right-3 h-9 w-9 grid place-items-center bg-black/60 backdrop-blur border border-[color:var(--gold)]/50 text-[color:var(--gold-bright)] hover:bg-black/80 transition z-10"
                   >
                     {downloadingIdx === activeImageIdx ? (
